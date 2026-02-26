@@ -23,12 +23,18 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# ✅ READ SERVICE ACCOUNT CREDS FROM ENV VARIABLE
+# ✅ Read credentials from Render Environment Variable
 creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
 creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 
 gc = gspread.authorize(creds)
-drive_service = build("drive", "v3", credentials=creds)
+
+drive_service = build(
+    "drive",
+    "v3",
+    credentials=creds,
+    cache_discovery=False   # avoids Render filesystem warnings
+)
 
 SPREADSHEET_ID = "16LPq3yLMR1B7LO5sWEfD8E14pydyj5dF8W0KJXEs1MU"
 sheet = gc.open_by_key(SPREADSHEET_ID)
@@ -36,8 +42,9 @@ sheet = gc.open_by_key(SPREADSHEET_ID)
 design_sheet = sheet.worksheet("AVAILABLE_DESIGNS")
 pwd_sheet = sheet.worksheet("PASSWORD")
 
-# ✅ YOUR NEW DRIVE FOLDER
+# ✅ Gmail-Owned Folder (Correct Fix For Quota Issue)
 PARENT_FOLDER_ID = "1bWI7H_zyXHgn4u0mW_ZzlZ-i_0dB31fF"
+
 
 # ---------------- DRIVE HELPERS ----------------
 
@@ -53,17 +60,20 @@ def upload_to_drive(filepath, filename):
     file = drive_service.files().create(
         body=file_metadata,
         media_body=media,
-        fields="id"
+        fields="id",
+        supportsAllDrives=True   # ✅ REQUIRED for shared / non-owned folders
     ).execute()
 
     file_id = file.get("id")
 
     drive_service.permissions().create(
         fileId=file_id,
-        body={"role": "reader", "type": "anyone"}
+        body={"role": "reader", "type": "anyone"},
+        supportsAllDrives=True
     ).execute()
 
     return f"https://drive.google.com/file/d/{file_id}/view"
+
 
 # ---------------- ROUTES ----------------
 

@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: catalogueapp
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python qr_tool.py"

@@ -1,90 +1,223 @@
-import os
+from flask import Flask, request, jsonify, send_from_directory
+from PIL import Image, ImageDraw, ImageFont
+import base64
 import io
-import requests
-import pandas as pd
-from PIL import Image
 import qrcode
-from qrcode.constants import ERROR_CORRECT_H
+import os
+import gspread
+
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
+app = Flask(__name__, static_folder="templates")
 
 OUTPUT_DIR = "OUTPUT"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# ---------------- GOOGLE CONFIG ----------------
 
-def extract_drive_file_id(link):
-    if "/file/d/" in link:
-        return link.split("/file/d/")[1].split("/")[0]
-    if "id=" in link:
-        return link.split("id=")[1].split("&")[0]
-    raise ValueError("Cannot parse Drive file ID")
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
 
+creds = Credentials.from_service_account_file(
+    "service_account.json",
+    scopes=SCOPES
+)
 
-def load_image_from_link(link):
-    if "drive.google.com" in link:
-        file_id = extract_drive_file_id(link)
-        link = f"https://drive.google.com/uc?id={file_id}"
+gc = gspread.authorize(creds)
+drive_service = build("drive", "v3", credentials=creds)
 
-    response = requests.get(link, timeout=15)
-    response.raise_for_status()
+SPREADSHEET_ID = "16LPq3yLMR1B7LO5sWEfD8E14pydyj5dF8W0KJXEs1MU"
+sheet = gc.open_by_key(SPREADSHEET_ID)
 
-    return Image.open(io.BytesIO(response.content)).convert("RGB")
+design_sheet = sheet.worksheet("AVAILABLE_DESIGNS")
+pwd_sheet = sheet.worksheet("PASSWORD")
 
-
-def generate_qr(value):
-    qr = qrcode.QRCode(
-        version=None,
-        error_correction=ERROR_CORRECT_H,   # CRITICAL FOR WHATSAPP
-        box_size=8,
-        border=2,
-    )
-
-    qr.add_data(str(value))
-    qr.make(fit=True)
-
-    return qr.make_image(fill_color="black", back_color="white")
+# 👉 YOUR PROVIDED FOLDER
+PARENT_FOLDER_ID = "1dBZrNjVtfMz2jay-CI4cHA8rCZarF3OO"
 
 
-def process_excel(excel_path):
-    df = pd.read_excel(excel_path)
+# ---------------- DRIVE HELPERS ----------------
 
-    for _, row in df.iterrows():
+def get_or_create_linux_upload_folder():
 
-        design_name = row["DESIGN NAME"]   # ← UPDATED SOURCE
-        link = row["LINK"]
-        desno = row["DESNO"]               # Only for output filename
+    query = f"'{PARENT_FOLDER_ID}' in parents and name='Linux upload' and trashed=false"
+    results = drive_service.files().list(
+        q=query,
+        fields="files(id, name)",
+        supportsAllDrives=True
+    ).execute()
 
-        try:
-            img = load_image_from_link(link)
-        except Exception as e:
-            print(f"Image load failed for {design_name}: {e}")
-            continue
+    files = results.get("files", [])
 
-        qr_img = generate_qr(design_name)
+    if files:
+        return files[0]["id"]
 
-        img_w, img_h = img.size
+    folder_metadata = {
+        "name": "Linux upload",
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [PARENT_FOLDER_ID]
+    }
 
-        # WhatsApp-safe QR sizing rule
-        qr_target_width = int(img_w * 0.18)
-        qr_ratio = qr_img.size[1] / qr_img.size[0]
-        qr_target_height = int(qr_target_width * qr_ratio)
+    folder = drive_service.files().create(
+        body=folder_metadata,
+        fields="id",
+        supportsAllDrives=True
+    ).execute()
 
-        qr_img = qr_img.resize(
-            (qr_target_width, qr_target_height),
-            Image.NEAREST   # VERY IMPORTANT (prevents blur)
-        )
+    return folder.get("id")
 
-        position = (
-            img_w - qr_target_width - 20,
-            img_h - qr_target_height - 20,
-        )
 
-        img.paste(qr_img, position)
+def upload_to_drive(filepath, filename):
 
-        save_path = os.path.join(OUTPUT_DIR, f"{desno}.jpg")
+    folder_id = get_or_create_linux_upload_folder()
 
-        img.save(save_path, quality=95, subsampling=0)
+    file_metadata = {
+        "name": filename,
+        "parents": [folder_id]
+    }
 
-        print(f"Processed → {design_name}")
+    media = MediaFileUpload(filepath, mimetype="image/jpeg")
+
+    file = drive_service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id",
+        supportsAllDrives=True
+    ).execute()
+
+    file_id = file.get("id")
+
+    drive_service.permissions().create(
+        fileId=file_id,
+        body={"role": "reader", "type": "anyone"},
+        supportsAllDrives=True
+    ).execute()
+
+    return f"https://drive.google.com/file/d/{file_id}/view"
+
+
+# ---------------- ROUTES ----------------
+
+@app.route("/")
+def home():
+    return send_from_directory("templates", "index.html")
+
+
+@app.route("/checkPassword", methods=["POST"])
+def check_password():
+    data = request.json
+    user_pwd = data.get("password", "").strip()
+    real_pwd = pwd_sheet.acell("A1").value.strip()
+    return jsonify({"ok": user_pwd == real_pwd})
+
+
+@app.route("/render", methods=["POST"])
+def render():
+
+    data = request.json
+
+    image_data = data.get("image")
+    design = data.get("design")
+    mrp = data.get("mrp")
+
+    if not image_data or not design or not mrp:
+        return jsonify({"error": "Missing fields"})
+
+    try:
+        header, encoded = image_data.split(",", 1)
+        image_bytes = base64.b64decode(encoded)
+    except:
+        return jsonify({"error": "Invalid image"})
+
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    W, H = 1600, 2000
+    canvas = Image.new("RGB", (W, H), "white")
+    draw = ImageDraw.Draw(canvas)
+
+    draw.rectangle([10, 10, W-10, H-10], outline="black", width=3)
+
+    img.thumbnail((1400, 1400))
+    canvas.paste(img, ((W - img.width)//2, 80))
+
+    try:
+        font_big = ImageFont.truetype("DejaVuSans-Bold.ttf", 48)
+        font_small = ImageFont.truetype("DejaVuSans.ttf", 40)
+    except:
+        font_big = None
+        font_small = None
+
+    draw.text((80, 1550), f"DES-{design}", fill="black", font=font_big)
+    draw.text((80, 1620), f"MRP: {mrp}", fill="black", font=font_small)
+
+    qr = qrcode.make(design)
+    qr = qr.resize((250, 250))
+    canvas.paste(qr, (W-330, H-330))
+
+    output_path = os.path.join(OUTPUT_DIR, f"{design}.jpg")
+    canvas.save(output_path, "JPEG")
+
+    try:
+        drive_link = upload_to_drive(output_path, f"{design}.jpg")
+    except Exception as e:
+        return jsonify({"error": f"Drive upload failed: {str(e)}"})
+
+    try:
+        design_sheet.append_row([
+            "",
+            f"DES-{design}",
+            mrp,
+            drive_link,
+            "YES"
+        ])
+    except Exception as e:
+        return jsonify({"error": f"Sheet write failed: {str(e)}"})
+
+    return jsonify({"ok": True})
+
+
+@app.route("/remove", methods=["POST"])
+def remove_design():
+
+    data = request.json
+    design = data.get("design", "").strip()
+
+    if not design:
+        return jsonify({"error": "Missing design"})
+
+    records = design_sheet.get_all_records()
+
+    for idx, row in enumerate(records, start=2):
+        if row.get("DESIGN NAME") == design or row.get("DESIGN NAME") == f"DES-{design}":
+            design_sheet.update(f"E{idx}", "NO")
+            return jsonify({"ok": True})
+
+    return jsonify({"error": "Design not found"})
+
+
+@app.route("/restock", methods=["POST"])
+def restock_design():
+
+    data = request.json
+    design = data.get("design", "").strip()
+
+    if not design:
+        return jsonify({"error": "Missing design"})
+
+    records = design_sheet.get_all_records()
+
+    for idx, row in enumerate(records, start=2):
+        if row.get("DESIGN NAME") == design or row.get("DESIGN NAME") == f"DES-{design}":
+            design_sheet.update(f"E{idx}", "YES")
+            return jsonify({"ok": True})
+
+    return jsonify({"error": "Design not found"})
 
 
 if __name__ == "__main__":
-    process_excel("CATALOGUE.xlsx")
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)

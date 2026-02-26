@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SMS Cataloger</title>
+
+<style>
+:root{
+  --dark:#071a3a;
+  --accent:#1fbf6b;
+  --border:#cfe0ff;
+  --bg:#eef4ff;
+  --danger:#e74c3c;
+}
+
+*{box-sizing:border-box;font-family:Segoe UI,Arial;}
+body{margin:0;background:var(--bg);}
+
+header{
+  position:sticky;
+  top:0;
+  background:linear-gradient(135deg,var(--dark),#0b2d66);
+  color:white;
+  padding:18px 24px;
+  display:flex;
+  gap:14px;
+  border-bottom:4px solid var(--accent);
+}
+
+.logo{
+  width:38px;height:38px;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent),#2ecc71);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:900;color:#07321c;
+}
+
+.panel{
+  background:white;
+  margin:16px;
+  padding:16px;
+  border-radius:14px;
+  border:1px solid var(--border);
+}
+
+.tabs{display:flex;gap:10px;margin-bottom:14px;}
+
+.tab{
+  padding:8px 18px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  cursor:pointer;
+  font-weight:900;
+  background:white;
+}
+
+.tab.active{
+  background:var(--dark);
+  color:white;
+}
+
+.zone{display:none;}
+.zone.active{display:block;}
+
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th,td{border:1px solid var(--border);padding:6px;font-weight:900;}
+th{background:var(--dark);color:white;}
+
+input{
+  width:100%;
+  padding:6px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  font-weight:900;
+  font-size:12px;
+}
+
+.scroll-zone{
+  max-height:65vh;
+  overflow:auto;
+  border:1px solid var(--border);
+  border-radius:10px;
+}
+
+.actions{margin-top:12px;}
+
+.btn{
+  padding:10px 18px;
+  border-radius:10px;
+  border:none;
+  font-weight:900;
+  cursor:pointer;
+  background:var(--accent);
+}
+
+/* CENTER TOAST */
+.toast-wrap{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+
+.toast{
+  background:white;
+  border-left:6px solid var(--accent);
+  padding:12px 18px;
+  border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+  font-weight:900;
+}
+
+.toast.bad{border-left-color:var(--danger);}
+
+/* PASSWORD MODAL */
+#pwdModal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.35);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:999;
+}
+
+.modal-box{
+  background:white;
+  padding:22px;
+  border-radius:14px;
+  width:280px;
+  box-shadow:0 20px 50px rgba(0,0,0,.35);
+  text-align:center;
+  font-weight:900;
+}
+
+.modal-box input{
+  margin-top:10px;
+  margin-bottom:14px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">S</div>
+  <div>
+    <div style="font-weight:900">SMS_CATALOGER</div>
+    <div style="font-size:12px;color:#cfe0ff;">Offices of Nawnit Nihal</div>
+  </div>
+</header>
+
+<div class="panel">
+
+  <div class="tabs">
+    <div class="tab active" id="tabAdd" onclick="switchTab('add')">ADD</div>
+    <div class="tab" id="tabRemove" onclick="switchTab('remove')">REMOVE</div>
+    <div class="tab" id="tabRestock" onclick="switchTab('restock')">RESTOCK</div>
+  </div>
+
+  <div id="addZone" class="zone active">
+    <div class="scroll-zone">
+      <table>
+        <thead><tr>
+          <th>Image</th><th>Design</th><th>MRP</th><th>Category</th>
+        </tr></thead>
+        <tbody id="addGrid"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="askPassword('add')">SUBMIT ADD</button>
+    </div>
+  </div>
+
+  <div id="removeZone" class="zone">
+    <div class="scroll-zone">
+      <table>
+        <thead><tr><th>Design</th></tr></thead>
+        <tbody id="removeGrid"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="askPassword('remove')">SUBMIT REMOVE</button>
+    </div>
+  </div>
+
+  <div id="restockZone" class="zone">
+    <div class="scroll-zone">
+      <table>
+        <thead><tr><th>Design</th></tr></thead>
+        <tbody id="restockGrid"></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="askPassword('restock')">SUBMIT RESTOCK</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<div id="pwdModal">
+  <div class="modal-box">
+    Enter Password
+    <input id="modalPwd" type="password">
+    <button class="btn" onclick="validatePassword()">CONFIRM</button>
+  </div>
+</div>
+
+<script>
+
+let pendingAction=null;
+
+/* TOAST */
+function toast(msg,bad){
+  toastWrap.innerHTML="";
+  const div=document.createElement("div");
+  div.className="toast"+(bad?" bad":"");
+  div.textContent=msg;
+  toastWrap.appendChild(div);
+  setTimeout(()=>toastWrap.innerHTML="",1600);
+}
+
+/* TAB SWITCH */
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
+
+  if(name==="add"){tabAdd.classList.add("active");addZone.classList.add("active");}
+  if(name==="remove"){tabRemove.classList.add("active");removeZone.classList.add("active");}
+  if(name==="restock"){tabRestock.classList.add("active");restockZone.classList.add("active");}
+}
+
+/* BUILD GRIDS */
+for(let i=0;i<30;i++){
+  addGrid.innerHTML += `<tr>
+    <td><input type="file" accept="image/jpeg" class="img"></td>
+    <td><input class="design"></td>
+    <td><input class="mrp"></td>
+    <td><input class="cat"></td>
+  </tr>`;
+
+  removeGrid.innerHTML += `<tr><td><input class="r_design"></td></tr>`;
+  restockGrid.innerHTML += `<tr><td><input class="s_design"></td></tr>`;
+}
+
+/* IMAGE RESIZE */
+function resizeToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const reader=new FileReader();
+
+    reader.onload=e=>{
+      img.onload=()=>{
+        const canvas=document.createElement("canvas");
+        const max=1400;
+
+        let w=img.width, h=img.height;
+        const scale=Math.min(max/w,max/h,1);
+        w*=scale; h*=scale;
+
+        canvas.width=w;
+        canvas.height=h;
+
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(img,0,0,w,h);
+
+        resolve(canvas.toDataURL("image/jpeg",0.85));
+      };
+      img.src=e.target.result;
+    };
+
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* PASSWORD FLOW */
+function askPassword(action){
+  pendingAction=action;
+  modalPwd.value="";
+  pwdModal.style.display="flex";
+  modalPwd.focus();
+}
+
+function validatePassword(){
+  const pwd=modalPwd.value.trim();
+  if(!pwd) return toast("Enter Password",true);
+
+  fetch("/checkPassword",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ password:pwd })
+  })
+  .then(r=>r.json())
+  .then(d=>{
+    if(!d.ok) return toast("Wrong Password",true);
+
+    pwdModal.style.display="none";
+
+    if(pendingAction==="add") bulkAdd();
+    if(pendingAction==="remove") bulkRemove();
+    if(pendingAction==="restock") bulkRestock();
+  })
+  .catch(()=>toast("Server Error",true));
+}
+
+/* ADD ACTION */
+async function bulkAdd(){
+
+  const rows=document.querySelectorAll("#addGrid tr");
+
+  for(const row of rows){
+
+    const file=row.querySelector(".img").files[0];
+    const design=row.querySelector(".design").value.trim();
+    const mrp=row.querySelector(".mrp").value.trim();
+    const category=row.querySelector(".cat").value.trim();
+
+    if(!file || !design || !mrp) continue;
+
+    const imageData=await resizeToBase64(file);
+
+    toast("Rendering " + design + "...");
+
+    fetch("/render",{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({
+        image:imageData,
+        design:design,
+        mrp:mrp,
+        category:category
+      })
+    })
+    .then(r=>r.json())
+    .then(data=>{
+      if(data.error) toast(data.error,true);
+      else toast("Saved: " + design);
+    })
+    .catch(()=>toast("Server Error",true));
+  }
+}
+
+/* REMOVE */
+function bulkRemove(){
+  document.querySelectorAll(".r_design").forEach(i=>{
+    const d=i.value.trim();
+    if(!d) return;
+
+    fetch("/remove",{
+      method:"POST",
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({design:d})
+    });
+  });
+  toast("Remove Updated");
+}
+
+/* RESTOCK */
+function bulkRestock(){
+  document.querySelectorAll(".s_design").forEach(i=>{
+    const d=i.value.trim();
+    if(!d) return;
+
+    fetch("/restock",{
+      method:"POST",
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({design:d})
+    });
+  });
+  toast("Restock Updated");
+}
+
+</script>
+
+</body>
+</html>

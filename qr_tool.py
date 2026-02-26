@@ -23,7 +23,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# ✅ SAFE FOR RENDER (NO FILES, NO GITHUB SECRETS LEAK)
+# ✅ READ SERVICE ACCOUNT CREDS FROM ENV VARIABLE
 creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
 creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 
@@ -36,48 +36,16 @@ sheet = gc.open_by_key(SPREADSHEET_ID)
 design_sheet = sheet.worksheet("AVAILABLE_DESIGNS")
 pwd_sheet = sheet.worksheet("PASSWORD")
 
-PARENT_FOLDER_ID = "1dBZrNjVtfMz2jay-CI4cHA8rCZarF3OO"
+# ✅ YOUR NEW DRIVE FOLDER
+PARENT_FOLDER_ID = "1bWI7H_zyXHgn4u0mW_ZzlZ-i_0dB31fF"
 
 # ---------------- DRIVE HELPERS ----------------
 
-def get_or_create_linux_upload_folder():
-
-    query = f"'{PARENT_FOLDER_ID}' in parents and name='Linux upload' and trashed=false"
-
-    results = drive_service.files().list(
-        q=query,
-        fields="files(id, name)",
-        supportsAllDrives=True,
-        includeItemsFromAllDrives=True
-    ).execute()
-
-    files = results.get("files", [])
-
-    if files:
-        return files[0]["id"]
-
-    folder_metadata = {
-        "name": "Linux upload",
-        "mimeType": "application/vnd.google-apps.folder",
-        "parents": [PARENT_FOLDER_ID]
-    }
-
-    folder = drive_service.files().create(
-        body=folder_metadata,
-        fields="id",
-        supportsAllDrives=True
-    ).execute()
-
-    return folder.get("id")
-
-
 def upload_to_drive(filepath, filename):
-
-    folder_id = get_or_create_linux_upload_folder()
 
     file_metadata = {
         "name": filename,
-        "parents": [folder_id]
+        "parents": [PARENT_FOLDER_ID]
     }
 
     media = MediaFileUpload(filepath, mimetype="image/jpeg")
@@ -85,16 +53,14 @@ def upload_to_drive(filepath, filename):
     file = drive_service.files().create(
         body=file_metadata,
         media_body=media,
-        fields="id",
-        supportsAllDrives=True
+        fields="id"
     ).execute()
 
     file_id = file.get("id")
 
     drive_service.permissions().create(
         fileId=file_id,
-        body={"role": "reader", "type": "anyone"},
-        supportsAllDrives=True
+        body={"role": "reader", "type": "anyone"}
     ).execute()
 
     return f"https://drive.google.com/file/d/{file_id}/view"

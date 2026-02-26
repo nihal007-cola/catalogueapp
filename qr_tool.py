@@ -5,9 +5,9 @@ import io
 import qrcode
 import os
 import gspread
-import json
 
-from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
@@ -23,9 +23,18 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# ✅ Read credentials from Render Environment Variable
-creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
-creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+# ✅ OAuth User Credentials (Render Environment Variables)
+creds = Credentials(
+    None,
+    refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
+    token_uri="https://oauth2.googleapis.com/token",
+    client_id=os.environ["GOOGLE_CLIENT_ID"],
+    client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+    scopes=SCOPES
+)
+
+# Refresh access token automatically
+creds.refresh(Request())
 
 gc = gspread.authorize(creds)
 
@@ -33,7 +42,7 @@ drive_service = build(
     "drive",
     "v3",
     credentials=creds,
-    cache_discovery=False   # avoids Render filesystem warnings
+    cache_discovery=False
 )
 
 SPREADSHEET_ID = "16LPq3yLMR1B7LO5sWEfD8E14pydyj5dF8W0KJXEs1MU"
@@ -42,7 +51,7 @@ sheet = gc.open_by_key(SPREADSHEET_ID)
 design_sheet = sheet.worksheet("AVAILABLE_DESIGNS")
 pwd_sheet = sheet.worksheet("PASSWORD")
 
-# ✅ Gmail-Owned Folder (Correct Fix For Quota Issue)
+# ✅ Gmail-Owned Folder (Now Uses Your Drive Storage)
 PARENT_FOLDER_ID = "1bWI7H_zyXHgn4u0mW_ZzlZ-i_0dB31fF"
 
 
@@ -60,16 +69,14 @@ def upload_to_drive(filepath, filename):
     file = drive_service.files().create(
         body=file_metadata,
         media_body=media,
-        fields="id",
-        supportsAllDrives=True   # ✅ REQUIRED for shared / non-owned folders
+        fields="id"
     ).execute()
 
     file_id = file.get("id")
 
     drive_service.permissions().create(
         fileId=file_id,
-        body={"role": "reader", "type": "anyone"},
-        supportsAllDrives=True
+        body={"role": "reader", "type": "anyone"}
     ).execute()
 
     return f"https://drive.google.com/file/d/{file_id}/view"

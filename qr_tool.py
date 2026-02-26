@@ -5,6 +5,7 @@ import io
 import qrcode
 import os
 import gspread
+import json
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -22,10 +23,9 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-creds = Credentials.from_service_account_file(
-    "service_account.json",
-    scopes=SCOPES
-)
+# ✅ SAFE FOR RENDER (NO FILES, NO GITHUB SECRETS LEAK)
+creds_dict = json.loads(os.environ["GOOGLE_CREDS"])
+creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
 
 gc = gspread.authorize(creds)
 drive_service = build("drive", "v3", credentials=creds)
@@ -36,19 +36,19 @@ sheet = gc.open_by_key(SPREADSHEET_ID)
 design_sheet = sheet.worksheet("AVAILABLE_DESIGNS")
 pwd_sheet = sheet.worksheet("PASSWORD")
 
-# 👉 YOUR PROVIDED FOLDER
 PARENT_FOLDER_ID = "1dBZrNjVtfMz2jay-CI4cHA8rCZarF3OO"
-
 
 # ---------------- DRIVE HELPERS ----------------
 
 def get_or_create_linux_upload_folder():
 
     query = f"'{PARENT_FOLDER_ID}' in parents and name='Linux upload' and trashed=false"
+
     results = drive_service.files().list(
         q=query,
         fields="files(id, name)",
-        supportsAllDrives=True
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True
     ).execute()
 
     files = results.get("files", [])
@@ -98,7 +98,6 @@ def upload_to_drive(filepath, filename):
     ).execute()
 
     return f"https://drive.google.com/file/d/{file_id}/view"
-
 
 # ---------------- ROUTES ----------------
 

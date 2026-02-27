@@ -17,7 +17,6 @@
 *{box-sizing:border-box;font-family:Segoe UI,Arial;}
 body{margin:0;background:var(--bg);}
 
-/* HEADER */
 header{
   position:sticky;
   top:0;
@@ -39,7 +38,6 @@ header{
   font-weight:900;color:#07321c;
 }
 
-/* PANEL */
 .panel{
   background:white;
   margin:18px;
@@ -49,12 +47,10 @@ header{
   box-shadow:0 10px 30px rgba(0,0,0,.05);
 }
 
-/* TABS */
 .tabs{
   display:flex;
   gap:12px;
   margin-bottom:18px;
-  flex-wrap:wrap;
 }
 
 .tab{
@@ -64,7 +60,6 @@ header{
   cursor:pointer;
   font-weight:900;
   background:white;
-  transition:.2s ease;
 }
 
 .tab.active{
@@ -76,7 +71,13 @@ header{
 .zone{display:none;}
 .zone.active{display:block;}
 
-/* TABLE */
+.scroll-zone{
+  max-height:65vh;
+  overflow:auto;
+  border:1px solid var(--border);
+  border-radius:12px;
+}
+
 table{
   width:100%;
   border-collapse:collapse;
@@ -97,13 +98,6 @@ th{
   z-index:5;
 }
 
-.scroll-zone{
-  max-height:65vh;
-  overflow:auto;
-  border:1px solid var(--border);
-  border-radius:12px;
-}
-
 input,select{
   width:100%;
   padding:6px;
@@ -113,7 +107,6 @@ input,select{
   font-size:12px;
 }
 
-/* BUTTONS */
 .actions{
   margin-top:16px;
   display:flex;
@@ -130,17 +123,9 @@ input,select{
   background:var(--accent);
 }
 
-.btn.dark{
-  background:var(--dark);
-  color:white;
-}
+.btn.dark{background:var(--dark);color:white;}
+.btn.red{background:var(--danger);color:white;}
 
-.btn.red{
-  background:var(--danger);
-  color:white;
-}
-
-/* LOADER */
 .loading-overlay{
   position:fixed;
   inset:0;
@@ -163,9 +148,7 @@ input,select{
   animation:spin 1s linear infinite;
 }
 
-@keyframes spin{
-  to{transform:rotate(360deg);}
-}
+@keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 
@@ -194,70 +177,71 @@ input,select{
 
 <!-- ADD -->
 <div id="add" class="zone active">
-  <div class="scroll-zone">
-    <table>
-      <thead>
-        <tr>
-          <th>Image</th>
-          <th>Design / Numeric</th>
-          <th>MRP</th>
-          <th>Category</th>
-        </tr>
-      </thead>
-      <tbody id="addGrid"></tbody>
-    </table>
-  </div>
+<div class="scroll-zone">
+<table>
+<thead>
+<tr>
+<th>Image</th>
+<th>Design / Numeric</th>
+<th>MRP</th>
+<th>Category</th>
+</tr>
+</thead>
+<tbody id="addGrid"></tbody>
+</table>
+</div>
 
-  <div class="actions">
-    <button class="btn">SUBMIT ADD</button>
-    <button class="btn red">DE-DUPLICATE</button>
-  </div>
+<div class="actions">
+<button class="btn" onclick="bulkAdd()">SUBMIT ADD</button>
+<button class="btn red" onclick="runDeduplicate()">DE-DUPLICATE</button>
+</div>
 
-  <div class="actions">
-    <input type="file" id="folderInput" webkitdirectory directory multiple>
-    <button class="btn dark">ONE TIME FOLDER IMAGE SYNC</button>
-  </div>
+<div class="actions">
+<input type="file" id="folderInput" webkitdirectory directory multiple>
+<button class="btn dark" onclick="bulkSyncFolder()">ONE TIME FOLDER IMAGE SYNC</button>
+</div>
 </div>
 
 <!-- REMOVE -->
 <div id="remove" class="zone">
-  <div class="scroll-zone">
-    <table>
-      <thead><tr><th>Numeric Only</th></tr></thead>
-      <tbody id="removeGrid"></tbody>
-    </table>
-  </div>
-  <div class="actions">
-    <button class="btn">SUBMIT REMOVE</button>
-  </div>
+<div class="scroll-zone">
+<table>
+<thead><tr><th>Numeric Only</th></tr></thead>
+<tbody id="removeGrid"></tbody>
+</table>
+</div>
+<div class="actions">
+<button class="btn" onclick="bulkRemove()">SUBMIT REMOVE</button>
+</div>
 </div>
 
 <!-- RESTOCK -->
 <div id="restock" class="zone">
-  <div class="scroll-zone">
-    <table>
-      <thead><tr><th>Numeric Only</th></tr></thead>
-      <tbody id="restockGrid"></tbody>
-    </table>
-  </div>
-  <div class="actions">
-    <button class="btn">SUBMIT RESTOCK</button>
-  </div>
+<div class="scroll-zone">
+<table>
+<thead><tr><th>Numeric Only</th></tr></thead>
+<tbody id="restockGrid"></tbody>
+</table>
+</div>
+<div class="actions">
+<button class="btn" onclick="bulkRestock()">SUBMIT RESTOCK</button>
+</div>
 </div>
 
 <!-- REPORT -->
 <div id="report" class="zone">
-  <div class="actions">
-    <button class="btn dark" onclick="loadReport(true)">AVAILABLE ONLY</button>
-    <button class="btn" onclick="loadReport(false)">ALL</button>
-  </div>
+<div class="actions">
+<button class="btn dark" onclick="loadReport(true)">AVAILABLE ONLY</button>
+<button class="btn" onclick="loadReport(false)">ALL</button>
+<button class="btn red" onclick="printSelected()">PRINT SELECTED</button>
+</div>
 
-  <div class="scroll-zone">
-    <table>
-      <thead id="reportHead"></thead>
-      <tbody id="reportGrid"></tbody>
-    </table>
-  </div>
+<div class="scroll-zone">
+<table>
+<thead id="reportHead"></thead>
+<tbody id="reportGrid"></tbody>
+</table>
+</div>
 </div>
 
 </div>
@@ -266,54 +250,135 @@ input,select{
 
 /* TAB SWITCH */
 document.querySelectorAll(".tab").forEach(tab=>{
-  tab.addEventListener("click",()=>{
-    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-    document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
-    tab.classList.add("active");
-    document.getElementById(tab.dataset.tab).classList.add("active");
-  });
+tab.addEventListener("click",()=>{
+document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
+tab.classList.add("active");
+document.getElementById(tab.dataset.tab).classList.add("active");
+});
 });
 
-/* BUILD 30 ROWS */
+/* LOADER */
+function showLoader(){document.getElementById("loader").classList.add("show");}
+function hideLoader(){document.getElementById("loader").classList.remove("show");}
+
+/* BUILD ROWS */
 function buildRows(){
-  const add=document.getElementById("addGrid");
-  const remove=document.getElementById("removeGrid");
-  const restock=document.getElementById("restockGrid");
-
-  for(let i=0;i<30;i++){
-    add.innerHTML+=`
-      <tr>
-        <td><input type="file" accept="image/jpeg"></td>
-        <td><input></td>
-        <td><input></td>
-        <td><input></td>
-      </tr>`;
-    remove.innerHTML+=`<tr><td><input></td></tr>`;
-    restock.innerHTML+=`<tr><td><input></td></tr>`;
-  }
+for(let i=0;i<30;i++){
+addGrid.innerHTML+=`
+<tr>
+<td><input type="file" class="img"></td>
+<td><input class="design"></td>
+<td><input class="mrp"></td>
+<td><input class="cat"></td>
+</tr>`;
+removeGrid.innerHTML+=`<tr><td><input class="r_design"></td></tr>`;
+restockGrid.innerHTML+=`<tr><td><input class="s_design"></td></tr>`;
 }
-
+}
 buildRows();
 
-/* REPORT LOAD */
+/* ADD */
+async function bulkAdd(){
+showLoader();
+const rows=document.querySelectorAll("#addGrid tr");
+for(const row of rows){
+const file=row.querySelector(".img").files[0];
+const design=row.querySelector(".design").value.trim();
+const mrp=row.querySelector(".mrp").value.trim();
+const cat=row.querySelector(".cat").value.trim();
+if(!file||!design||!mrp)continue;
+const reader=new FileReader();
+reader.onload=async e=>{
+await fetch("/render",{
+method:"POST",
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+image:e.target.result,
+design:design,
+mrp:mrp,
+category_eng:cat
+})
+});
+};
+reader.readAsDataURL(file);
+}
+hideLoader();
+}
+
+/* REMOVE */
+async function bulkRemove(){
+showLoader();
+document.querySelectorAll(".r_design").forEach(i=>{
+if(i.value.trim())
+fetch("/remove",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:i.value})});
+});
+hideLoader();
+}
+
+/* RESTOCK */
+async function bulkRestock(){
+showLoader();
+document.querySelectorAll(".s_design").forEach(i=>{
+if(i.value.trim())
+fetch("/restock",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:i.value})});
+});
+hideLoader();
+}
+
+/* DEDUP */
+async function runDeduplicate(){
+showLoader();
+await fetch("/deduplicate",{method:"POST"});
+hideLoader();
+}
+
+/* REPORT */
 async function loadReport(availableOnly){
-  const res=await fetch("/report/available?all="+(!availableOnly));
-  const data=await res.json();
+showLoader();
+const res=await fetch("/report/available?all="+(!availableOnly));
+const data=await res.json();
+hideLoader();
 
-  if(!data.data.length)return;
+if(!data.data.length)return;
 
-  const headers=Object.keys(data.data[0]);
-  reportHead.innerHTML="<tr>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr>";
+const headers=Object.keys(data.data[0]);
+reportHead.innerHTML="<tr><th>Select</th>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr>";
 
-  reportGrid.innerHTML="";
-  data.data.forEach(row=>{
-    if(!availableOnly || row["AVAILABILITY"]==="YES"){
-      reportGrid.innerHTML+="<tr>"+headers.map(h=>`<td>${row[h]||""}</td>`).join("")+"</tr>";
-    }
-  });
+reportGrid.innerHTML="";
+data.data.forEach(row=>{
+if(!availableOnly || row["AVAILABILITY"]==="YES"){
+reportGrid.innerHTML+="<tr><td><input type='checkbox'></td>"+headers.map(h=>`<td>${row[h]||""}</td>`).join("")+"</tr>";
+}
+});
+}
+
+/* PRINT */
+function printSelected(){
+const rows=document.querySelectorAll("#reportGrid tr");
+let html="<h2>Print List</h2><table border='1' cellpadding='5'><tr>"+Array.from(reportHead.querySelectorAll("th")).slice(1).map(th=>`<th>${th.innerText}</th>`).join("")+"</tr>";
+rows.forEach(r=>{
+if(r.querySelector("input")?.checked){
+html+="<tr>"+Array.from(r.cells).slice(1).map(c=>`<td>${c.innerText}</td>`).join("")+"</tr>";
+}
+});
+html+="</table>";
+const w=window.open("");
+w.document.write(html);
+w.print();
+}
+
+/* FOLDER SYNC */
+async function bulkSyncFolder(){
+const files=document.getElementById("folderInput").files;
+if(!files.length)return;
+const formData=new FormData();
+for(let f of files) formData.append("images",f);
+showLoader();
+await fetch("/bulkSync",{method:"POST",body:formData});
+hideLoader();
 }
 
 </script>
-
 </body>
 </html>

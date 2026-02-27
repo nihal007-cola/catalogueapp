@@ -5,25 +5,27 @@ import io
 import qrcode
 import os
 import gspread
+import csv
+import tempfile
 
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
+
 app = Flask(__name__, static_folder="templates")
 
 OUTPUT_DIR = "OUTPUT"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ---------------- GOOGLE CONFIG ----------------
+# ---------------- GOOGLE CONFIG (UNCHANGED) ----------------
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
-# ✅ OAuth User Credentials (Render Environment Variables)
 creds = Credentials(
     None,
     refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
@@ -33,7 +35,6 @@ creds = Credentials(
     scopes=SCOPES
 )
 
-# Refresh access token automatically
 creds.refresh(Request())
 
 gc = gspread.authorize(creds)
@@ -51,17 +52,36 @@ sheet = gc.open_by_key(SPREADSHEET_ID)
 design_sheet = sheet.worksheet("AVAILABLE_DESIGNS")
 pwd_sheet = sheet.worksheet("PASSWORD")
 
-# ✅ Gmail-Owned Folder (Now Uses Your Drive Storage)
 PARENT_FOLDER_ID = "1bWI7H_zyXHgn4u0mW_ZzlZ-i_0dB31fF"
+
+# ---------------- SHEET STRUCTURE ----------------
+# EXACT MATCH TO IMAGE 1
+
+HEADERS = [
+    "PDF NAME",
+    "DESIGN NAME",
+    "MRP",
+    "LINK",
+    "AVAILABILITY",
+    "DES-FORMAT",
+    "DESNO",
+    "CAT(ENG)",
+    "CAT (BANGLA)",
+    "ID"
+]
+
+COLUMN_INDEX = {name: idx + 1 for idx, name in enumerate(HEADERS)}
 
 
 # ---------------- DRIVE HELPERS ----------------
 
-def upload_to_drive(filepath, filename):
+def upload_to_drive(filepath, filename, folder_id=None):
+
+    parent = folder_id if folder_id else PARENT_FOLDER_ID
 
     file_metadata = {
         "name": filename,
-        "parents": [PARENT_FOLDER_ID]
+        "parents": [parent]
     }
 
     media = MediaFileUpload(filepath, mimetype="image/jpeg")
@@ -82,6 +102,30 @@ def upload_to_drive(filepath, filename):
     return f"https://drive.google.com/file/d/{file_id}/view"
 
 
+# ---------------- UTILITIES ----------------
+
+def normalize_design(design):
+    design = design.strip().upper()
+    if not design.startswith("DES-"):
+        design = f"DES-{design}"
+    return design
+
+
+def design_exists(design_name):
+    col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
+    return design_name in col
+
+
+def update_availability(design_name, value):
+    col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
+    for idx, val in enumerate(col):
+        if val == design_name:
+            row_number = idx + 1
+            design_sheet.update_cell(row_number, COLUMN_INDEX["AVAILABILITY"], value)
+            return True
+    return False
+
+
 # ---------------- ROUTES ----------------
 
 @app.route("/")
@@ -97,17 +141,31 @@ def check_password():
     return jsonify({"ok": user_pwd == real_pwd})
 
 
+# ---------------- SINGLE DESIGN RENDER ----------------
+
 @app.route("/render", methods=["POST"])
 def render():
 
     data = request.json
 
     image_data = data.get("image")
-    design = data.get("design")
+    design_raw = data.get("design")
     mrp = data.get("mrp")
+    cat_eng = data.get("category_eng", "")
+    cat_bangla = data.get("category_bangla", "")
+    des_format = data.get("des_format", "")
+    desno = data.get("desno", "")
+    id_value = data.get("id", "")
+    folder_id = data.get("folder_id", None)
 
-    if not image_data or not design or not mrp:
+    if not image_data or not design_raw or not mrp:
         return jsonify({"error": "Missing fields"})
+
+    design = normalize_design(design_raw)
+
+    # ❌ BLOCK DUPLICATE
+    if design_exists(design):
+        return jsonify({"error": "Design already exists"})
 
     try:
         header, encoded = image_data.split(",", 1)
@@ -133,7 +191,7 @@ def render():
         font_big = None
         font_small = None
 
-    draw.text((80, 1550), f"DES-{design}", fill="black", font=font_big)
+    draw.text((80, 1550), design, fill="black", font=font_big)
     draw.text((80, 1620), f"MRP: {mrp}", fill="black", font=font_small)
 
     qr = qrcode.make(design)
@@ -144,61 +202,106 @@ def render():
     canvas.save(output_path, "JPEG")
 
     try:
-        drive_link = upload_to_drive(output_path, f"{design}.jpg")
+        drive_link = upload_to_drive(output_path, f"{design}.jpg", folder_id)
     except Exception as e:
         return jsonify({"error": f"Drive upload failed: {str(e)}"})
 
-    try:
-        design_sheet.append_row([
-            "",
-            f"DES-{design}",
-            mrp,
-            drive_link,
-            "YES"
-        ])
-    except Exception as e:
-        return jsonify({"error": f"Sheet write failed: {str(e)}"})
+    row = [
+        "",
+        design,
+        mrp,
+        drive_link,
+        "YES",
+        des_format,
+        desno,
+        cat_eng,
+        cat_bangla,
+        id_value
+    ]
+
+    design_sheet.append_row(row)
 
     return jsonify({"ok": True})
 
 
+# ---------------- REMOVE ----------------
+
 @app.route("/remove", methods=["POST"])
 def remove_design():
 
-    data = request.json
-    design = data.get("design", "").strip()
+    design_raw = request.json.get("design", "")
+    design = normalize_design(design_raw)
 
-    if not design:
-        return jsonify({"error": "Missing design"})
+    success = update_availability(design, "NO")
 
-    records = design_sheet.get_all_records()
+    if not success:
+        return jsonify({"error": "Design not found"})
 
-    for idx, row in enumerate(records, start=2):
-        if row.get("DESIGN NAME") == design or row.get("DESIGN NAME") == f"DES-{design}":
-            design_sheet.update(f"E{idx}", "NO")
-            return jsonify({"ok": True})
+    return jsonify({"ok": True})
 
-    return jsonify({"error": "Design not found"})
 
+# ---------------- RESTOCK ----------------
 
 @app.route("/restock", methods=["POST"])
 def restock_design():
 
-    data = request.json
-    design = data.get("design", "").strip()
+    design_raw = request.json.get("design", "")
+    design = normalize_design(design_raw)
 
-    if not design:
-        return jsonify({"error": "Missing design"})
+    success = update_availability(design, "YES")
 
-    records = design_sheet.get_all_records()
+    if not success:
+        return jsonify({"error": "Design not found"})
 
-    for idx, row in enumerate(records, start=2):
-        if row.get("DESIGN NAME") == design or row.get("DESIGN NAME") == f"DES-{design}":
-            design_sheet.update(f"E{idx}", "YES")
-            return jsonify({"ok": True})
+    return jsonify({"ok": True})
 
-    return jsonify({"error": "Design not found"})
 
+# ---------------- EXCEL IMPORT ----------------
+
+@app.route("/importExcel", methods=["POST"])
+def import_excel():
+
+    file = request.files.get("file")
+
+    if not file:
+        return jsonify({"error": "No file uploaded"})
+
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    file.save(temp.name)
+
+    rows_added = 0
+
+    with open(temp.name, newline='', encoding="utf-8") as csvfile:
+        reader = csv.DictReader(csvfile)
+
+        required = ["DESIGN NAME", "MRP"]
+
+        if not all(col in reader.fieldnames for col in required):
+            return jsonify({"error": "Invalid headers"})
+
+        for row in reader:
+            design = normalize_design(row["DESIGN NAME"])
+            mrp = row["MRP"]
+
+            if not design_exists(design):
+                design_sheet.append_row([
+                    "",
+                    design,
+                    mrp,
+                    "",
+                    "YES",
+                    "",
+                    "",
+                    "",
+                    "",
+                    ""
+                ])
+                rows_added += 1
+
+    return jsonify({"ok": True, "rows_added": rows_added})
+
+
+# ---------------- MAIN ----------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))

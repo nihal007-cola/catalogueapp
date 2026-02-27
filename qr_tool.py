@@ -42,6 +42,7 @@ HEADERS = [
     "PDF NAME","DESIGN NAME","MRP","LINK","AVAILABILITY",
     "DES-FORMAT","DESNO","CAT(ENG)","CAT (BANGLA)","ID"
 ]
+
 COLUMN_INDEX = {h:i+1 for i,h in enumerate(HEADERS)}
 
 # ---------------- CATEGORY MASTER ----------------
@@ -62,31 +63,36 @@ def normalize_design(d):
     d=d.strip().upper()
     return d if d.startswith("DES-") else f"DES-{d}"
 
-def extract_desno_from_design(design):
+def extract_desno(design):
     core=design.replace("DES-","")
     num=""
     for c in core:
-        if c.isdigit(): num+=c
-        else: break
+        if c.isdigit():
+            num+=c
+        else:
+            break
     return num
 
-def extract_format_from_design(design):
-    return design.replace("DES-","").replace(extract_desno_from_design(design),"")
+def extract_format(design):
+    return design.replace("DES-","").replace(extract_desno(design),"")
 
 def upload_to_drive(path, filename):
     meta={"name":filename,"parents":[PARENT_FOLDER_ID]}
     media=MediaFileUpload(path,mimetype="image/jpeg")
     file=drive_service.files().create(body=meta,media_body=media,fields="id").execute()
     file_id=file.get("id")
-    drive_service.permissions().create(fileId=file_id,body={"role":"reader","type":"anyone"}).execute()
-    return file_id,f"https://drive.google.com/file/d/{file_id}/view?usp=drivesdk"
+    drive_service.permissions().create(
+        fileId=file_id,
+        body={"role":"reader","type":"anyone"}
+    ).execute()
+    link=f"https://drive.google.com/file/d/{file_id}/view?usp=drivesdk"
+    return file_id,link
 
 def update_availability_by_numeric(value,status):
-    value=value.strip()
     col=design_sheet.col_values(COLUMN_INDEX["DESNO"])
     for i,v in enumerate(col):
         if i==0: continue
-        if v.strip()==value:
+        if v.strip()==value.strip():
             design_sheet.update_cell(i+1,COLUMN_INDEX["AVAILABILITY"],status)
             return True
     return False
@@ -109,6 +115,7 @@ def categories():
 @app.route("/render",methods=["POST"])
 def render():
     data=request.json
+
     image_data=data.get("image")
     design_raw=data.get("design")
     mrp=data.get("mrp")
@@ -118,9 +125,10 @@ def render():
         return jsonify({"error":"Missing fields"})
 
     design=normalize_design(design_raw)
-    desno=extract_desno_from_design(design)
-    des_format=extract_format_from_design(design)
+    desno=extract_desno(design)
+    des_format=extract_format(design)
 
+    # Auto add new category
     if cat_eng not in CATEGORY_MASTER:
         CATEGORY_MASTER[cat_eng]=(cat_eng,"X")
 
@@ -132,6 +140,7 @@ def render():
     W,H=1600,2000
     canvas=Image.new("RGB",(W,H),"white")
     draw=ImageDraw.Draw(canvas)
+
     draw.rectangle([5,5,W-5,H-5],outline="black",width=2)
 
     bottom_reserved=320
@@ -155,7 +164,7 @@ def render():
     file_id,drive_link=upload_to_drive(path,f"{design}.jpg")
 
     row=[
-        str(int(time.time()*1000)),
+        file_id,                # PDF NAME
         design,
         mrp,
         drive_link,
@@ -170,7 +179,7 @@ def render():
     design_sheet.append_row(row)
     return jsonify({"ok":True})
 
-# ---------------- BULK IMAGE SYNC ----------------
+# ---------------- BULK SYNC ----------------
 
 @app.route("/bulkSync",methods=["POST"])
 def bulk_sync():
@@ -180,7 +189,9 @@ def bulk_sync():
 
     for file in files:
         name=file.filename.split(".")[0]
-        if name.endswith(".0"): name=name[:-2]
+        if name.endswith(".0"):
+            name=name[:-2]
+
         for i,v in enumerate(desno_col):
             if i==0: continue
             if v.strip()==name:
@@ -214,9 +225,9 @@ def deduplicate():
     seen=set()
     delete=[]
     for idx in range(len(col)-1,-1,-1):
-        r=idx+2
+        row_index=idx+2
         if col[idx] in seen:
-            delete.append(r)
+            delete.append(row_index)
         else:
             seen.add(col[idx])
     delete.sort(reverse=True)

@@ -55,7 +55,6 @@ pwd_sheet = sheet.worksheet("PASSWORD")
 PARENT_FOLDER_ID = "1bWI7H_zyXHgn4u0mW_ZzlZ-i_0dB31fF"
 
 # ---------------- SHEET STRUCTURE ----------------
-# EXACT MATCH TO IMAGE 1
 
 HEADERS = [
     "PDF NAME",
@@ -111,11 +110,6 @@ def normalize_design(design):
     return design
 
 
-def design_exists(design_name):
-    col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
-    return design_name in col
-
-
 def update_availability(design_name, value):
     col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
     for idx, val in enumerate(col):
@@ -162,10 +156,6 @@ def render():
         return jsonify({"error": "Missing fields"})
 
     design = normalize_design(design_raw)
-
-    # ❌ BLOCK DUPLICATE
-    if design_exists(design):
-        return jsonify({"error": "Design already exists"})
 
     try:
         header, encoded = image_data.split(",", 1)
@@ -256,6 +246,64 @@ def restock_design():
     return jsonify({"ok": True})
 
 
+# ---------------- DEDUPLICATE (KEEP LATEST) ----------------
+
+@app.route("/deduplicate", methods=["POST"])
+def deduplicate():
+
+    design_col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
+
+    if len(design_col) <= 1:
+        return jsonify({"ok": True, "deleted_rows": 0})
+
+    design_col = design_col[1:]
+
+    last_occurrence = {}
+    rows_to_delete = []
+
+    for idx, design in enumerate(design_col, start=2):
+        if design:
+            last_occurrence[design] = idx
+
+    for idx, design in enumerate(design_col, start=2):
+        if design:
+            if last_occurrence.get(design) != idx:
+                rows_to_delete.append(idx)
+
+    rows_to_delete.sort(reverse=True)
+
+    for row in rows_to_delete:
+        design_sheet.delete_rows(row)
+
+    return jsonify({
+        "ok": True,
+        "deleted_rows": len(rows_to_delete)
+    })
+
+
+# ---------------- AVAILABLE REPORT ----------------
+
+@app.route("/report/available", methods=["GET"])
+def available_report():
+
+    all_data = design_sheet.get_all_values()
+
+    if len(all_data) <= 1:
+        return jsonify({"data": []})
+
+    headers = all_data[0]
+    rows = all_data[1:]
+
+    available_rows = []
+
+    for row in rows:
+        if len(row) >= COLUMN_INDEX["AVAILABILITY"]:
+            if row[COLUMN_INDEX["AVAILABILITY"] - 1] == "YES":
+                available_rows.append(dict(zip(headers, row)))
+
+    return jsonify({"data": available_rows})
+
+
 # ---------------- EXCEL IMPORT ----------------
 
 @app.route("/importExcel", methods=["POST"])
@@ -283,20 +331,20 @@ def import_excel():
             design = normalize_design(row["DESIGN NAME"])
             mrp = row["MRP"]
 
-            if not design_exists(design):
-                design_sheet.append_row([
-                    "",
-                    design,
-                    mrp,
-                    "",
-                    "YES",
-                    "",
-                    "",
-                    "",
-                    "",
-                    ""
-                ])
-                rows_added += 1
+            design_sheet.append_row([
+                "",
+                design,
+                mrp,
+                "",
+                "YES",
+                "",
+                "",
+                "",
+                "",
+                ""
+            ])
+
+            rows_added += 1
 
     return jsonify({"ok": True, "rows_added": rows_added})
 

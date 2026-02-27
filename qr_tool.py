@@ -19,7 +19,7 @@ app = Flask(__name__, static_folder="templates")
 OUTPUT_DIR = "OUTPUT"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ---------------- GOOGLE CONFIG (UNCHANGED) ----------------
+# ---------------- GOOGLE CONFIG ----------------
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -71,7 +71,6 @@ HEADERS = [
 
 COLUMN_INDEX = {name: idx + 1 for idx, name in enumerate(HEADERS)}
 
-
 # ---------------- DRIVE HELPERS ----------------
 
 def upload_to_drive(filepath, filename, folder_id=None):
@@ -100,7 +99,6 @@ def upload_to_drive(filepath, filename, folder_id=None):
 
     return f"https://drive.google.com/file/d/{file_id}/view"
 
-
 # ---------------- UTILITIES ----------------
 
 def normalize_design(design):
@@ -109,16 +107,23 @@ def normalize_design(design):
         design = f"DES-{design}"
     return design
 
-
 def update_availability(design_name, value):
-    col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
-    for idx, val in enumerate(col):
-        if val == design_name:
-            row_number = idx + 1
-            design_sheet.update_cell(row_number, COLUMN_INDEX["AVAILABILITY"], value)
-            return True
-    return False
 
+    design_name = normalize_design(design_name)
+
+    col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
+
+    for idx, val in enumerate(col):
+        if val.strip().upper() == design_name:
+            row_number = idx + 1
+            design_sheet.update_cell(
+                row_number,
+                COLUMN_INDEX["AVAILABILITY"],
+                value
+            )
+            return True
+
+    return False
 
 # ---------------- ROUTES ----------------
 
@@ -126,14 +131,25 @@ def update_availability(design_name, value):
 def home():
     return send_from_directory("templates", "index.html")
 
-
 @app.route("/checkPassword", methods=["POST"])
 def check_password():
-    data = request.json
-    user_pwd = data.get("password", "").strip()
-    real_pwd = pwd_sheet.acell("A1").value.strip()
-    return jsonify({"ok": user_pwd == real_pwd})
+    try:
+        user_pwd = request.json.get("password", "").strip()
+        real_pwd = pwd_sheet.acell("A1").value.strip()
+        return jsonify({"ok": user_pwd == real_pwd})
+    except:
+        return jsonify({"ok": False})
 
+# ---------------- CATEGORY LIST ----------------
+
+@app.route("/categories", methods=["GET"])
+def get_categories():
+    col = design_sheet.col_values(COLUMN_INDEX["CAT(ENG)"])
+    if len(col) <= 1:
+        return jsonify({"categories": []})
+
+    unique = sorted(set([c.strip() for c in col[1:] if c.strip() != ""]))
+    return jsonify({"categories": unique})
 
 # ---------------- SINGLE DESIGN RENDER ----------------
 
@@ -145,6 +161,7 @@ def render():
     image_data = data.get("image")
     design_raw = data.get("design")
     mrp = data.get("mrp")
+
     cat_eng = data.get("category_eng", "")
     cat_bangla = data.get("category_bangla", "")
     des_format = data.get("des_format", "")
@@ -169,24 +186,33 @@ def render():
     canvas = Image.new("RGB", (W, H), "white")
     draw = ImageDraw.Draw(canvas)
 
-    draw.rectangle([10, 10, W-10, H-10], outline="black", width=3)
+    # Thinner border
+    draw.rectangle([5, 5, W-5, H-5], outline="black", width=2)
 
-    img.thumbnail((1400, 1400))
-    canvas.paste(img, ((W - img.width)//2, 80))
+    # Larger image area
+    bottom_reserved = 320
+    image_max_height = H - bottom_reserved - 40
+    image_max_width = W - 80
+
+    img.thumbnail((image_max_width, image_max_height))
+
+    canvas.paste(img, ((W - img.width)//2, 30))
 
     try:
-        font_big = ImageFont.truetype("DejaVuSans-Bold.ttf", 48)
-        font_small = ImageFont.truetype("DejaVuSans.ttf", 40)
+        font_big = ImageFont.truetype("DejaVuSans-Bold.ttf", 56)
+        font_small = ImageFont.truetype("DejaVuSans.ttf", 44)
     except:
         font_big = None
         font_small = None
 
-    draw.text((80, 1550), design, fill="black", font=font_big)
-    draw.text((80, 1620), f"MRP: {mrp}", fill="black", font=font_small)
+    text_y = H - 260
+
+    draw.text((60, text_y), design, fill="black", font=font_big)
+    draw.text((60, text_y + 75), f"MRP: {mrp}", fill="black", font=font_small)
 
     qr = qrcode.make(design)
-    qr = qr.resize((250, 250))
-    canvas.paste(qr, (W-330, H-330))
+    qr = qr.resize((280, 280))
+    canvas.paste(qr, (W - 330, H - 330))
 
     output_path = os.path.join(OUTPUT_DIR, f"{design}.jpg")
     canvas.save(output_path, "JPEG")
@@ -213,40 +239,31 @@ def render():
 
     return jsonify({"ok": True})
 
-
 # ---------------- REMOVE ----------------
 
 @app.route("/remove", methods=["POST"])
 def remove_design():
-
     design_raw = request.json.get("design", "")
-    design = normalize_design(design_raw)
-
-    success = update_availability(design, "NO")
+    success = update_availability(design_raw, "NO")
 
     if not success:
         return jsonify({"error": "Design not found"})
 
     return jsonify({"ok": True})
-
 
 # ---------------- RESTOCK ----------------
 
 @app.route("/restock", methods=["POST"])
 def restock_design():
-
     design_raw = request.json.get("design", "")
-    design = normalize_design(design_raw)
-
-    success = update_availability(design, "YES")
+    success = update_availability(design_raw, "YES")
 
     if not success:
         return jsonify({"error": "Design not found"})
 
     return jsonify({"ok": True})
 
-
-# ---------------- DEDUPLICATE (KEEP LATEST) ----------------
+# ---------------- DEDUPLICATE ----------------
 
 @app.route("/deduplicate", methods=["POST"])
 def deduplicate():
@@ -280,11 +297,12 @@ def deduplicate():
         "deleted_rows": len(rows_to_delete)
     })
 
-
-# ---------------- AVAILABLE REPORT ----------------
+# ---------------- REPORT ----------------
 
 @app.route("/report/available", methods=["GET"])
 def available_report():
+
+    show_all = request.args.get("all", "false").lower() == "true"
 
     all_data = design_sheet.get_all_values()
 
@@ -294,15 +312,14 @@ def available_report():
     headers = all_data[0]
     rows = all_data[1:]
 
-    available_rows = []
+    output = []
 
     for row in rows:
         if len(row) >= COLUMN_INDEX["AVAILABILITY"]:
-            if row[COLUMN_INDEX["AVAILABILITY"] - 1] == "YES":
-                available_rows.append(dict(zip(headers, row)))
+            if show_all or row[COLUMN_INDEX["AVAILABILITY"] - 1] == "YES":
+                output.append(dict(zip(headers, row)))
 
-    return jsonify({"data": available_rows})
-
+    return jsonify({"data": output})
 
 # ---------------- EXCEL IMPORT ----------------
 
@@ -347,7 +364,6 @@ def import_excel():
             rows_added += 1
 
     return jsonify({"ok": True, "rows_added": rows_added})
-
 
 # ---------------- MAIN ----------------
 

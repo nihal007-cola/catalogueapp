@@ -13,7 +13,6 @@
   --bg:#eef4ff;
   --danger:#e74c3c;
 }
-
 *{box-sizing:border-box;font-family:Segoe UI,Arial;}
 body{margin:0;background:var(--bg);}
 
@@ -25,7 +24,6 @@ header{
   border-bottom:4px solid var(--accent);
   z-index:100;
 }
-
 .logo{
   width:40px;height:40px;border-radius:12px;
   background:linear-gradient(135deg,var(--accent),#2ecc71);
@@ -85,15 +83,16 @@ input,select{
 }
 .loading-overlay.show{display:flex;}
 
-.loading-spinner{
-  width:70px;height:70px;
-  border:6px solid rgba(255,255,255,.3);
-  border-radius:50%;
-  border-top-color:var(--accent);
-  animation:spin 1s linear infinite;
+.modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  display:none;align-items:center;justify-content:center;
+  z-index:99999;
 }
-@keyframes spin{to{transform:rotate(360deg);}}
-
+.modal.show{display:flex;}
+.modal-box{
+  background:white;padding:30px;border-radius:16px;
+  width:400px;text-align:center;font-weight:900;
+}
 .toast{
   position:fixed;bottom:20px;right:20px;
   background:var(--dark);color:white;
@@ -107,6 +106,14 @@ input,select{
 
 <div id="loader" class="loading-overlay">
   <div class="loading-spinner"></div>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-box">
+    <div id="modalText"></div>
+    <br>
+    <button class="btn dark" onclick="closeModal()">OK</button>
+  </div>
 </div>
 
 <header>
@@ -144,12 +151,6 @@ input,select{
 
 <div class="actions">
 <button id="addBtn" class="btn">SUBMIT ADD</button>
-<button class="btn red" onclick="runDeduplicate()">DE-DUPLICATE</button>
-</div>
-
-<div class="actions">
-<input type="file" id="folderInput" webkitdirectory directory multiple>
-<button class="btn dark" onclick="bulkSyncFolder()">ONE TIME FOLDER IMAGE SYNC</button>
 </div>
 </div>
 
@@ -178,13 +179,21 @@ input,select{
 <!-- REPORT -->
 <div id="report" class="zone">
 <div class="actions">
-<button class="btn dark" onclick="loadReport(true)">AVAILABLE ONLY</button>
-<button class="btn" onclick="loadReport(false)">ALL</button>
-<button class="btn red" onclick="printSelected()">PRINT SELECTED</button>
+<button class="btn dark" onclick="loadReport()">LOAD</button>
+<button class="btn" onclick="exportCSV()">CSV</button>
+<button class="btn" onclick="exportExcel()">Excel</button>
+<button class="btn red" onclick="exportJSON()">JSON</button>
 </div>
 <div class="scroll-zone">
 <table>
-<thead id="reportHead"></thead>
+<thead>
+<tr>
+<th>CAT (BANGLA)</th>
+<th>CAT(ENG)</th>
+<th>DESIGN NAME</th>
+<th>MRP</th>
+</tr>
+</thead>
 <tbody id="reportGrid"></tbody>
 </table>
 </div>
@@ -197,16 +206,20 @@ input,select{
 /* UTILITIES */
 function showLoader(){loader.classList.add("show")}
 function hideLoader(){loader.classList.remove("show")}
-function toast(msg){
-  const t=document.createElement("div");
-  t.className="toast";
-  t.innerText=msg;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(),2500);
+function showModal(msg){
+modalText.innerText=msg;
+modal.classList.add("show");
 }
-function lock(btn,state){btn.disabled=state}
+function closeModal(){modal.classList.remove("show")}
+function toast(msg){
+const t=document.createElement("div");
+t.className="toast";
+t.innerText=msg;
+document.body.appendChild(t);
+setTimeout(()=>t.remove(),2500);
+}
 
-/* TAB */
+/* TAB SWITCH */
 document.querySelectorAll(".tab").forEach(tab=>{
 tab.onclick=()=>{
 document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
@@ -216,10 +229,10 @@ document.getElementById(tab.dataset.tab).classList.add("active");
 };
 });
 
-/* BUILD 30 ROWS WITH DROPDOWN */
+/* BUILD GRID */
 async function buildRows(){
-const catRes=await fetch("/categories");
-const cats=(await catRes.json()).categories;
+const res=await fetch("/categories");
+const cats=(await res.json()).categories;
 
 for(let i=0;i<30;i++){
 addGrid.innerHTML+=`
@@ -229,7 +242,9 @@ addGrid.innerHTML+=`
 <td><input class="mrp"></td>
 <td>
 <select class="cat">
+<option value="">Select Cat / Add Category</option>
 ${cats.map(c=>`<option>${c}</option>`).join("")}
+<option value="__add__">Add Category</option>
 </select>
 </td>
 </tr>`;
@@ -239,155 +254,121 @@ restockGrid.innerHTML+=`<tr><td><input class="s_design"></td></tr>`;
 }
 buildRows();
 
-/* ENTER SUBMIT */
-document.addEventListener("keydown",e=>{
-if(e.key==="Enter"){
-const active=document.querySelector(".zone.active").id;
-if(active==="add")addBtn.click();
-if(active==="remove")removeBtn.click();
-if(active==="restock")restockBtn.click();
+/* ADD CATEGORY */
+document.addEventListener("change",function(e){
+if(e.target.classList.contains("cat") && e.target.value==="__add__"){
+let newCat=prompt("Enter New Category (ENG)");
+if(!newCat)return;
+newCat=newCat.toUpperCase();
+const option=document.createElement("option");
+option.textContent=newCat;
+option.value=newCat;
+e.target.insertBefore(option,e.target.lastElementChild);
+e.target.value=newCat;
 }
 });
 
-/* ADD */
+/* ADD SUBMIT */
 addBtn.onclick=async()=>{
-lock(addBtn,true);
 showLoader();
+let entries=[];
+let error=false;
 
-let success=0,fail=0;
-const rows=document.querySelectorAll("#addGrid tr");
-
-for(const row of rows){
+for(const row of document.querySelectorAll("#addGrid tr")){
 const file=row.querySelector(".img").files[0];
 const design=row.querySelector(".design").value.trim();
 const mrp=row.querySelector(".mrp").value.trim();
 const cat=row.querySelector(".cat").value;
 
-if(!file||!design||!mrp)continue;
+if(!file) continue;
+
+if(!design || !mrp || !cat){
+showModal("If image is uploaded, all fields must be filled.");
+error=true;
+break;
+}
 
 const base64=await fileToBase64(file);
+entries.push({image:base64,design,mrp,category_eng:cat});
+}
+
+if(error || !entries.length){
+hideLoader();
+return;
+}
 
 const res=await fetch("/render",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
-body:JSON.stringify({image:base64,design,mrp,category_eng:cat})
+body:JSON.stringify({entries})
 });
 const data=await res.json();
-if(data.ok) success++;
-else fail++;
-}
 
 hideLoader();
-toast(`ADD → Success:${success} Fail:${fail}`);
-lock(addBtn,false);
+
+if(data.ok){
+toast("ADD SUCCESS");
+wipeUI();
+}else{
+showModal("Backend Error");
+}
 };
 
-/* REMOVE */
-removeBtn.onclick=async()=>{
-lock(removeBtn,true);
-showLoader();
-let success=0,fail=0;
-
-for(const i of document.querySelectorAll(".r_design")){
-if(!i.value.trim())continue;
-const res=await fetch("/remove",{
-method:"POST",
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({design:i.value})
-});
-const data=await res.json();
-if(data.ok) success++;
-else fail++;
-}
-
-hideLoader();
-toast(`REMOVE → Success:${success} Fail:${fail}`);
-lock(removeBtn,false);
-};
-
-/* RESTOCK */
-restockBtn.onclick=async()=>{
-lock(restockBtn,true);
-showLoader();
-let success=0,fail=0;
-
-for(const i of document.querySelectorAll(".s_design")){
-if(!i.value.trim())continue;
-const res=await fetch("/restock",{
-method:"POST",
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({design:i.value})
-});
-const data=await res.json();
-if(data.ok) success++;
-else fail++;
-}
-
-hideLoader();
-toast(`RESTOCK → Success:${success} Fail:${fail}`);
-lock(restockBtn,false);
-};
-
-/* DEDUP */
-async function runDeduplicate(){
-showLoader();
-const res=await fetch("/deduplicate",{method:"POST"});
-const data=await res.json();
-hideLoader();
-toast(`DEDUP → Deleted:${data.deleted_rows}`);
+/* WIPE UI */
+function wipeUI(){
+document.querySelectorAll("#addGrid input").forEach(i=>i.value="");
+document.querySelectorAll("#addGrid select").forEach(s=>s.selectedIndex=0);
 }
 
 /* REPORT */
-async function loadReport(availableOnly){
+async function loadReport(){
 showLoader();
-const res=await fetch("/report/available?all="+(!availableOnly));
+const res=await fetch("/report/available");
 const data=await res.json();
 hideLoader();
 
-if(!data.data.length)return;
-
-const headers=Object.keys(data.data[0]);
-reportHead.innerHTML="<tr><th>Select</th>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr>";
-
 reportGrid.innerHTML="";
-data.data.forEach(row=>{
-if(!availableOnly||row["AVAILABILITY"]==="YES"){
-reportGrid.innerHTML+="<tr><td><input type='checkbox'></td>"+headers.map(h=>`<td>${row[h]||""}</td>`).join("")+"</tr>";
-}
+data.data.forEach(r=>{
+reportGrid.innerHTML+=`
+<tr>
+<td>${r["CAT (BANGLA)"]}</td>
+<td>${r["CAT(ENG)"]}</td>
+<td>${r["DESIGN NAME"]}</td>
+<td>${r["MRP"]}</td>
+</tr>`;
 });
 }
 
-/* PRINT */
-function printSelected(){
-const rows=document.querySelectorAll("#reportGrid tr");
-let html="<h2>Print</h2><table border='1'><tr>"+
-Array.from(reportHead.querySelectorAll("th")).slice(1).map(th=>`<th>${th.innerText}</th>`).join("")+"</tr>";
-
-rows.forEach(r=>{
-if(r.querySelector("input")?.checked){
-html+="<tr>"+Array.from(r.cells).slice(1).map(c=>`<td>${c.innerText}</td>`).join("")+"</tr>";
-}
+/* EXPORTS */
+function exportCSV(){
+let csv="CAT (BANGLA),CAT(ENG),DESIGN NAME,MRP\n";
+document.querySelectorAll("#reportGrid tr").forEach(r=>{
+csv+=Array.from(r.cells).map(c=>c.innerText).join(",")+"\n";
 });
-html+="</table>";
-const w=window.open("");
-w.document.write(html);
-w.print();
+download(csv,"report.csv","text/csv");
 }
-
-/* FOLDER SYNC */
-async function bulkSyncFolder(){
-const files=folderInput.files;
-if(!files.length)return;
-showLoader();
-const batchSize=20;
-for(let i=0;i<files.length;i+=batchSize){
-const batch=Array.from(files).slice(i,i+batchSize);
-const formData=new FormData();
-batch.forEach(f=>formData.append("images",f));
-await fetch("/bulkSync",{method:"POST",body:formData});
+function exportJSON(){
+let arr=[];
+document.querySelectorAll("#reportGrid tr").forEach(r=>{
+arr.push({
+cat_bangla:r.cells[0].innerText,
+cat_eng:r.cells[1].innerText,
+design:r.cells[2].innerText,
+mrp:r.cells[3].innerText
+});
+});
+download(JSON.stringify(arr,null,2),"report.json","application/json");
 }
-hideLoader();
-toast("SYNC COMPLETE");
+function exportExcel(){
+let html="<table>"+reportGrid.innerHTML+"</table>";
+download(html,"report.xls","application/vnd.ms-excel");
+}
+function download(content,filename,type){
+const blob=new Blob([content],{type});
+const a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download=filename;
+a.click();
 }
 
 function fileToBase64(file){

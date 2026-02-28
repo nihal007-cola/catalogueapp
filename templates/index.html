@@ -18,137 +18,88 @@
 body{margin:0;background:var(--bg);}
 
 header{
-  position:sticky;
-  top:0;
+  position:sticky;top:0;
   background:linear-gradient(135deg,var(--dark),var(--dark2));
-  color:white;
-  padding:18px 24px;
-  display:flex;
-  align-items:center;
-  gap:14px;
+  color:white;padding:18px 24px;
+  display:flex;align-items:center;gap:14px;
   border-bottom:4px solid var(--accent);
   z-index:100;
 }
 
 .logo{
-  width:40px;height:40px;
-  border-radius:12px;
+  width:40px;height:40px;border-radius:12px;
   background:linear-gradient(135deg,var(--accent),#2ecc71);
   display:flex;align-items:center;justify-content:center;
   font-weight:900;color:#07321c;
 }
 
 .panel{
-  background:white;
-  margin:18px;
-  padding:20px;
-  border-radius:16px;
-  border:1px solid var(--border);
+  background:white;margin:18px;padding:20px;
+  border-radius:16px;border:1px solid var(--border);
   box-shadow:0 10px 30px rgba(0,0,0,.05);
 }
 
-.tabs{
-  display:flex;
-  gap:12px;
-  margin-bottom:18px;
-}
-
+.tabs{display:flex;gap:12px;margin-bottom:18px;}
 .tab{
-  padding:10px 22px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  cursor:pointer;
-  font-weight:900;
-  background:white;
+  padding:10px 22px;border-radius:999px;
+  border:1px solid var(--border);cursor:pointer;
+  font-weight:900;background:white;
 }
-
-.tab.active{
-  background:var(--dark);
-  color:white;
-  border-color:var(--dark);
-}
+.tab.active{background:var(--dark);color:white;border-color:var(--dark);}
 
 .zone{display:none;}
 .zone.active{display:block;}
 
 .scroll-zone{
-  max-height:65vh;
-  overflow:auto;
+  max-height:65vh;overflow:auto;
   border:1px solid var(--border);
   border-radius:12px;
 }
 
-table{
-  width:100%;
-  border-collapse:collapse;
-  font-size:12px;
-}
-
-th,td{
-  border:1px solid var(--border);
-  padding:8px;
-  font-weight:900;
-}
-
-th{
-  background:var(--dark);
-  color:white;
-  position:sticky;
-  top:0;
-  z-index:5;
-}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+th,td{border:1px solid var(--border);padding:8px;font-weight:900;}
+th{background:var(--dark);color:white;position:sticky;top:0;z-index:5;}
 
 input,select{
-  width:100%;
-  padding:6px;
-  border-radius:8px;
+  width:100%;padding:6px;border-radius:8px;
   border:1px solid var(--border);
-  font-weight:900;
-  font-size:12px;
+  font-weight:900;font-size:12px;
 }
 
-.actions{
-  margin-top:16px;
-  display:flex;
-  gap:12px;
-  flex-wrap:wrap;
-}
+.actions{margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;}
 
 .btn{
-  padding:10px 20px;
-  border-radius:10px;
-  border:none;
-  font-weight:900;
-  cursor:pointer;
+  padding:10px 20px;border-radius:10px;
+  border:none;font-weight:900;cursor:pointer;
   background:var(--accent);
 }
-
 .btn.dark{background:var(--dark);color:white;}
 .btn.red{background:var(--danger);color:white;}
+.btn:disabled{opacity:.6;cursor:not-allowed;}
 
 .loading-overlay{
-  position:fixed;
-  inset:0;
+  position:fixed;inset:0;
   background:rgba(0,0,0,.7);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  backdrop-filter:blur(4px);
-  z-index:9999;
+  display:none;align-items:center;justify-content:center;
+  backdrop-filter:blur(4px);z-index:9999;
 }
-
 .loading-overlay.show{display:flex;}
 
 .loading-spinner{
-  width:70px;
-  height:70px;
+  width:70px;height:70px;
   border:6px solid rgba(255,255,255,.3);
   border-radius:50%;
   border-top-color:var(--accent);
   animation:spin 1s linear infinite;
 }
-
 @keyframes spin{to{transform:rotate(360deg);}}
+
+.toast{
+  position:fixed;bottom:20px;right:20px;
+  background:var(--dark);color:white;
+  padding:12px 20px;border-radius:10px;
+  font-weight:900;z-index:99999;
+}
 </style>
 </head>
 
@@ -192,7 +143,7 @@ input,select{
 </div>
 
 <div class="actions">
-<button class="btn" onclick="bulkAdd()">SUBMIT ADD</button>
+<button id="addBtn" class="btn">SUBMIT ADD</button>
 <button class="btn red" onclick="runDeduplicate()">DE-DUPLICATE</button>
 </div>
 
@@ -205,26 +156,22 @@ input,select{
 <!-- REMOVE -->
 <div id="remove" class="zone">
 <div class="scroll-zone">
-<table>
-<thead><tr><th>Numeric Only</th></tr></thead>
-<tbody id="removeGrid"></tbody>
-</table>
+<table><thead><tr><th>Numeric Only</th></tr></thead>
+<tbody id="removeGrid"></tbody></table>
 </div>
 <div class="actions">
-<button class="btn" onclick="bulkRemove()">SUBMIT REMOVE</button>
+<button id="removeBtn" class="btn">SUBMIT REMOVE</button>
 </div>
 </div>
 
 <!-- RESTOCK -->
 <div id="restock" class="zone">
 <div class="scroll-zone">
-<table>
-<thead><tr><th>Numeric Only</th></tr></thead>
-<tbody id="restockGrid"></tbody>
-</table>
+<table><thead><tr><th>Numeric Only</th></tr></thead>
+<tbody id="restockGrid"></tbody></table>
 </div>
 <div class="actions">
-<button class="btn" onclick="bulkRestock()">SUBMIT RESTOCK</button>
+<button id="restockBtn" class="btn">SUBMIT RESTOCK</button>
 </div>
 </div>
 
@@ -235,7 +182,6 @@ input,select{
 <button class="btn" onclick="loadReport(false)">ALL</button>
 <button class="btn red" onclick="printSelected()">PRINT SELECTED</button>
 </div>
-
 <div class="scroll-zone">
 <table>
 <thead id="reportHead"></thead>
@@ -248,29 +194,43 @@ input,select{
 
 <script>
 
-/* TAB SWITCH */
+/* LOADER + TOAST */
+function showLoader(){loader.classList.add("show")}
+function hideLoader(){loader.classList.remove("show")}
+function toast(msg){
+  const t=document.createElement("div");
+  t.className="toast";
+  t.innerText=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2000);
+}
+
+/* TAB */
 document.querySelectorAll(".tab").forEach(tab=>{
-tab.addEventListener("click",()=>{
+tab.onclick=()=>{
 document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
 document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
 tab.classList.add("active");
 document.getElementById(tab.dataset.tab).classList.add("active");
-});
+};
 });
 
-/* LOADER */
-function showLoader(){document.getElementById("loader").classList.add("show");}
-function hideLoader(){document.getElementById("loader").classList.remove("show");}
+/* BUILD 30 ROWS */
+async function buildRows(){
+const catRes=await fetch("/categories");
+const cats=(await catRes.json()).categories;
 
-/* BUILD ROWS */
-function buildRows(){
 for(let i=0;i<30;i++){
 addGrid.innerHTML+=`
 <tr>
 <td><input type="file" class="img"></td>
 <td><input class="design"></td>
 <td><input class="mrp"></td>
-<td><input class="cat"></td>
+<td>
+<select class="cat">
+${cats.map(c=>`<option>${c}</option>`).join("")}
+</select>
+</td>
 </tr>`;
 removeGrid.innerHTML+=`<tr><td><input class="r_design"></td></tr>`;
 restockGrid.innerHTML+=`<tr><td><input class="s_design"></td></tr>`;
@@ -278,59 +238,93 @@ restockGrid.innerHTML+=`<tr><td><input class="s_design"></td></tr>`;
 }
 buildRows();
 
+/* ENTER KEY SUBMIT */
+document.addEventListener("keydown",e=>{
+if(e.key==="Enter"){
+const active=document.querySelector(".zone.active").id;
+if(active==="add")addBtn.click();
+if(active==="remove")removeBtn.click();
+if(active==="restock")restockBtn.click();
+}
+});
+
+/* PREVENT DOUBLE CLICK */
+function lockBtn(btn,state){btn.disabled=state}
+
 /* ADD */
-async function bulkAdd(){
+addBtn.onclick=async()=>{
+lockBtn(addBtn,true);
 showLoader();
+let promises=[];
 const rows=document.querySelectorAll("#addGrid tr");
+
 for(const row of rows){
 const file=row.querySelector(".img").files[0];
 const design=row.querySelector(".design").value.trim();
 const mrp=row.querySelector(".mrp").value.trim();
-const cat=row.querySelector(".cat").value.trim();
+const cat=row.querySelector(".cat").value;
+
 if(!file||!design||!mrp)continue;
-const reader=new FileReader();
-reader.onload=async e=>{
-await fetch("/render",{
+
+const base64=await fileToBase64(file);
+
+promises.push(fetch("/render",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
-body:JSON.stringify({
-image:e.target.result,
-design:design,
-mrp:mrp,
-category_eng:cat
-})
-});
-};
-reader.readAsDataURL(file);
+body:JSON.stringify({image:base64,design,mrp,category_eng:cat})
+}));
 }
+
+await Promise.all(promises);
 hideLoader();
-}
+toast("ADD SUCCESS");
+lockBtn(addBtn,false);
+};
 
 /* REMOVE */
-async function bulkRemove(){
+removeBtn.onclick=async()=>{
+lockBtn(removeBtn,true);
 showLoader();
+let promises=[];
 document.querySelectorAll(".r_design").forEach(i=>{
 if(i.value.trim())
-fetch("/remove",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:i.value})});
+promises.push(fetch("/remove",{
+method:"POST",
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({design:i.value})
+}));
 });
+await Promise.all(promises);
 hideLoader();
-}
+toast("REMOVE DONE");
+lockBtn(removeBtn,false);
+};
 
 /* RESTOCK */
-async function bulkRestock(){
+restockBtn.onclick=async()=>{
+lockBtn(restockBtn,true);
 showLoader();
+let promises=[];
 document.querySelectorAll(".s_design").forEach(i=>{
 if(i.value.trim())
-fetch("/restock",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:i.value})});
+promises.push(fetch("/restock",{
+method:"POST",
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({design:i.value})
+}));
 });
+await Promise.all(promises);
 hideLoader();
-}
+toast("RESTOCK DONE");
+lockBtn(restockBtn,false);
+};
 
 /* DEDUP */
 async function runDeduplicate(){
 showLoader();
 await fetch("/deduplicate",{method:"POST"});
 hideLoader();
+toast("DEDUP COMPLETE");
 }
 
 /* REPORT */
@@ -339,15 +333,12 @@ showLoader();
 const res=await fetch("/report/available?all="+(!availableOnly));
 const data=await res.json();
 hideLoader();
-
 if(!data.data.length)return;
-
 const headers=Object.keys(data.data[0]);
 reportHead.innerHTML="<tr><th>Select</th>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr>";
-
 reportGrid.innerHTML="";
 data.data.forEach(row=>{
-if(!availableOnly || row["AVAILABILITY"]==="YES"){
+if(!availableOnly||row["AVAILABILITY"]==="YES"){
 reportGrid.innerHTML+="<tr><td><input type='checkbox'></td>"+headers.map(h=>`<td>${row[h]||""}</td>`).join("")+"</tr>";
 }
 });
@@ -356,7 +347,7 @@ reportGrid.innerHTML+="<tr><td><input type='checkbox'></td>"+headers.map(h=>`<td
 /* PRINT */
 function printSelected(){
 const rows=document.querySelectorAll("#reportGrid tr");
-let html="<h2>Print List</h2><table border='1' cellpadding='5'><tr>"+Array.from(reportHead.querySelectorAll("th")).slice(1).map(th=>`<th>${th.innerText}</th>`).join("")+"</tr>";
+let html="<h2>Print</h2><table border='1'><tr>"+Array.from(reportHead.querySelectorAll("th")).slice(1).map(th=>`<th>${th.innerText}</th>`).join("")+"</tr>";
 rows.forEach(r=>{
 if(r.querySelector("input")?.checked){
 html+="<tr>"+Array.from(r.cells).slice(1).map(c=>`<td>${c.innerText}</td>`).join("")+"</tr>";
@@ -368,15 +359,29 @@ w.document.write(html);
 w.print();
 }
 
-/* FOLDER SYNC */
+/* FOLDER SYNC (BATCHED TO AVOID 413) */
 async function bulkSyncFolder(){
-const files=document.getElementById("folderInput").files;
+const files=folderInput.files;
 if(!files.length)return;
-const formData=new FormData();
-for(let f of files) formData.append("images",f);
 showLoader();
+const batchSize=20;
+for(let i=0;i<files.length;i+=batchSize){
+const batch=Array.from(files).slice(i,i+batchSize);
+const formData=new FormData();
+batch.forEach(f=>formData.append("images",f));
 await fetch("/bulkSync",{method:"POST",body:formData});
+}
 hideLoader();
+toast("SYNC COMPLETE");
+}
+
+function fileToBase64(file){
+return new Promise((resolve,reject)=>{
+const reader=new FileReader();
+reader.onload=()=>resolve(reader.result);
+reader.onerror=reject;
+reader.readAsDataURL(file);
+});
 }
 
 </script>

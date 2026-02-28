@@ -79,7 +79,7 @@ input,select{
 
 .loading-overlay{
   position:fixed;inset:0;
-  background:rgba(0,0,0,.7);
+  background:rgba(0,0,0,.6);
   display:none;align-items:center;justify-content:center;
   backdrop-filter:blur(4px);z-index:9999;
 }
@@ -133,7 +133,7 @@ input,select{
 <thead>
 <tr>
 <th>Image</th>
-<th>Design / Numeric</th>
+<th>Design</th>
 <th>MRP</th>
 <th>Category</th>
 </tr>
@@ -194,7 +194,7 @@ input,select{
 
 <script>
 
-/* LOADER + TOAST */
+/* UTILITIES */
 function showLoader(){loader.classList.add("show")}
 function hideLoader(){loader.classList.remove("show")}
 function toast(msg){
@@ -202,8 +202,9 @@ function toast(msg){
   t.className="toast";
   t.innerText=msg;
   document.body.appendChild(t);
-  setTimeout(()=>t.remove(),2000);
+  setTimeout(()=>t.remove(),2500);
 }
+function lock(btn,state){btn.disabled=state}
 
 /* TAB */
 document.querySelectorAll(".tab").forEach(tab=>{
@@ -215,7 +216,7 @@ document.getElementById(tab.dataset.tab).classList.add("active");
 };
 });
 
-/* BUILD 30 ROWS */
+/* BUILD 30 ROWS WITH DROPDOWN */
 async function buildRows(){
 const catRes=await fetch("/categories");
 const cats=(await catRes.json()).categories;
@@ -238,7 +239,7 @@ restockGrid.innerHTML+=`<tr><td><input class="s_design"></td></tr>`;
 }
 buildRows();
 
-/* ENTER KEY SUBMIT */
+/* ENTER SUBMIT */
 document.addEventListener("keydown",e=>{
 if(e.key==="Enter"){
 const active=document.querySelector(".zone.active").id;
@@ -248,14 +249,12 @@ if(active==="restock")restockBtn.click();
 }
 });
 
-/* PREVENT DOUBLE CLICK */
-function lockBtn(btn,state){btn.disabled=state}
-
 /* ADD */
 addBtn.onclick=async()=>{
-lockBtn(addBtn,true);
+lock(addBtn,true);
 showLoader();
-let promises=[];
+
+let success=0,fail=0;
 const rows=document.querySelectorAll("#addGrid tr");
 
 for(const row of rows){
@@ -268,63 +267,74 @@ if(!file||!design||!mrp)continue;
 
 const base64=await fileToBase64(file);
 
-promises.push(fetch("/render",{
+const res=await fetch("/render",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify({image:base64,design,mrp,category_eng:cat})
-}));
+});
+const data=await res.json();
+if(data.ok) success++;
+else fail++;
 }
 
-await Promise.all(promises);
 hideLoader();
-toast("ADD SUCCESS");
-lockBtn(addBtn,false);
+toast(`ADD → Success:${success} Fail:${fail}`);
+lock(addBtn,false);
 };
 
 /* REMOVE */
 removeBtn.onclick=async()=>{
-lockBtn(removeBtn,true);
+lock(removeBtn,true);
 showLoader();
-let promises=[];
-document.querySelectorAll(".r_design").forEach(i=>{
-if(i.value.trim())
-promises.push(fetch("/remove",{
+let success=0,fail=0;
+
+for(const i of document.querySelectorAll(".r_design")){
+if(!i.value.trim())continue;
+const res=await fetch("/remove",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify({design:i.value})
-}));
 });
-await Promise.all(promises);
+const data=await res.json();
+if(data.ok) success++;
+else fail++;
+}
+
 hideLoader();
-toast("REMOVE DONE");
-lockBtn(removeBtn,false);
+toast(`REMOVE → Success:${success} Fail:${fail}`);
+lock(removeBtn,false);
 };
 
 /* RESTOCK */
 restockBtn.onclick=async()=>{
-lockBtn(restockBtn,true);
+lock(restockBtn,true);
 showLoader();
-let promises=[];
-document.querySelectorAll(".s_design").forEach(i=>{
-if(i.value.trim())
-promises.push(fetch("/restock",{
+let success=0,fail=0;
+
+for(const i of document.querySelectorAll(".s_design")){
+if(!i.value.trim())continue;
+const res=await fetch("/restock",{
 method:"POST",
 headers:{'Content-Type':'application/json'},
 body:JSON.stringify({design:i.value})
-}));
 });
-await Promise.all(promises);
+const data=await res.json();
+if(data.ok) success++;
+else fail++;
+}
+
 hideLoader();
-toast("RESTOCK DONE");
-lockBtn(restockBtn,false);
+toast(`RESTOCK → Success:${success} Fail:${fail}`);
+lock(restockBtn,false);
 };
 
 /* DEDUP */
 async function runDeduplicate(){
 showLoader();
-await fetch("/deduplicate",{method:"POST"});
+const res=await fetch("/deduplicate",{method:"POST"});
+const data=await res.json();
 hideLoader();
-toast("DEDUP COMPLETE");
+toast(`DEDUP → Deleted:${data.deleted_rows}`);
 }
 
 /* REPORT */
@@ -333,9 +343,12 @@ showLoader();
 const res=await fetch("/report/available?all="+(!availableOnly));
 const data=await res.json();
 hideLoader();
+
 if(!data.data.length)return;
+
 const headers=Object.keys(data.data[0]);
 reportHead.innerHTML="<tr><th>Select</th>"+headers.map(h=>`<th>${h}</th>`).join("")+"</tr>";
+
 reportGrid.innerHTML="";
 data.data.forEach(row=>{
 if(!availableOnly||row["AVAILABILITY"]==="YES"){
@@ -347,7 +360,9 @@ reportGrid.innerHTML+="<tr><td><input type='checkbox'></td>"+headers.map(h=>`<td
 /* PRINT */
 function printSelected(){
 const rows=document.querySelectorAll("#reportGrid tr");
-let html="<h2>Print</h2><table border='1'><tr>"+Array.from(reportHead.querySelectorAll("th")).slice(1).map(th=>`<th>${th.innerText}</th>`).join("")+"</tr>";
+let html="<h2>Print</h2><table border='1'><tr>"+
+Array.from(reportHead.querySelectorAll("th")).slice(1).map(th=>`<th>${th.innerText}</th>`).join("")+"</tr>";
+
 rows.forEach(r=>{
 if(r.querySelector("input")?.checked){
 html+="<tr>"+Array.from(r.cells).slice(1).map(c=>`<td>${c.innerText}</td>`).join("")+"</tr>";
@@ -359,7 +374,7 @@ w.document.write(html);
 w.print();
 }
 
-/* FOLDER SYNC (BATCHED TO AVOID 413) */
+/* FOLDER SYNC */
 async function bulkSyncFolder(){
 const files=folderInput.files;
 if(!files.length)return;
@@ -383,7 +398,6 @@ reader.onerror=reject;
 reader.readAsDataURL(file);
 });
 }
-
 </script>
 </body>
 </html>

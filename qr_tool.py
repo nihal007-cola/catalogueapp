@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from PIL import Image, ImageDraw, ImageFont
-import base64, io, qrcode, os, gspread, time, re, string
+import base64, io, qrcode, os, gspread, re, string
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -10,8 +10,6 @@ app = Flask(__name__, static_folder="templates")
 
 OUTPUT_DIR = "OUTPUT"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# ---------------- GOOGLE CONFIG ----------------
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -41,10 +39,7 @@ HEADERS = [
     "PDF NAME","DESIGN NAME","MRP","LINK","AVAILABILITY",
     "DES-FORMAT","DESNO","CAT(ENG)","CAT (BANGLA)","ID"
 ]
-
 COLUMN_INDEX = {h:i+1 for i,h in enumerate(HEADERS)}
-
-# ---------------- CATEGORY MASTER ----------------
 
 CATEGORY_MASTER = {
     "HALF SHIRT":("হাফ শার্ট","B"),
@@ -65,7 +60,7 @@ def normalize_design(d):
     return d
 
 def extract_desno(design):
-    match = re.search(r'DES-(\d+)', design)
+    match = re.search(r'(\d+)', design)
     return match.group(1) if match else ""
 
 def extract_format(design):
@@ -105,9 +100,17 @@ def update_availability(value, status):
     design_col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
 
     for i in range(1, len(desno_col)):
-        if value == desno_col[i].strip() or value == design_col[i].replace("DES-",""):
+        sheet_desno = desno_col[i].strip()
+        sheet_design = design_col[i].strip().upper()
+
+        if value == sheet_desno:
             design_sheet.update_cell(i+1, COLUMN_INDEX["AVAILABILITY"], status)
             return True
+
+        if value == sheet_design:
+            design_sheet.update_cell(i+1, COLUMN_INDEX["AVAILABILITY"], status)
+            return True
+
     return False
 
 # ---------------- ROUTES ----------------
@@ -123,8 +126,6 @@ def categories():
     unique.update(CATEGORY_MASTER.keys())
     return jsonify({"categories":sorted(unique)})
 
-# ---------------- RENDER ----------------
-
 @app.route("/render",methods=["POST"])
 def render():
     data = request.json
@@ -135,16 +136,15 @@ def render():
     cat_eng = data.get("category_eng","").upper().strip()
 
     if not image_data or not design_raw or not mrp:
-        return jsonify({"error":"Missing fields"})
+        return jsonify({"ok":False,"error":"Missing fields"})
 
     design = normalize_design(design_raw)
     desno = extract_desno(design)
     des_format = extract_format(design)
 
     if not desno:
-        return jsonify({"error":"Invalid Design Format"})
+        return jsonify({"ok":False,"error":"Invalid Design Format"})
 
-    # CATEGORY LOGIC
     if cat_eng not in CATEGORY_MASTER:
         new_id = next_sequential_id()
         CATEGORY_MASTER[cat_eng] = (cat_eng, new_id)
@@ -194,43 +194,17 @@ def render():
     design_sheet.append_row(row)
     return jsonify({"ok":True})
 
-# ---------------- BULK SYNC ----------------
-
-@app.route("/bulkSync",methods=["POST"])
-def bulk_sync():
-    files = request.files.getlist("images")
-    desno_col = design_sheet.col_values(COLUMN_INDEX["DESNO"])
-    updated = 0
-
-    for file in files:
-        name = file.filename.split(".")[0]
-        name = name.replace(".0","")
-
-        for i in range(1,len(desno_col)):
-            if desno_col[i].strip() == name:
-                path = os.path.join(OUTPUT_DIR,file.filename)
-                file.save(path)
-                file_id, link = upload_to_drive(path,file.filename)
-                design_sheet.update_cell(i+1,COLUMN_INDEX["LINK"],link)
-                design_sheet.update_cell(i+1,COLUMN_INDEX["PDF NAME"],file_id)
-                updated += 1
-                break
-
-    return jsonify({"updated":updated})
-
-# ---------------- REMOVE / RESTOCK ----------------
-
 @app.route("/remove",methods=["POST"])
 def remove():
     val = request.json.get("design","")
-    return jsonify({"ok":update_availability(val,"NO")})
+    success = update_availability(val,"NO")
+    return jsonify({"ok":success})
 
 @app.route("/restock",methods=["POST"])
 def restock():
     val = request.json.get("design","")
-    return jsonify({"ok":update_availability(val,"YES")})
-
-# ---------------- DEDUPLICATE ----------------
+    success = update_availability(val,"YES")
+    return jsonify({"ok":success})
 
 @app.route("/deduplicate",methods=["POST"])
 def deduplicate():
@@ -250,8 +224,6 @@ def deduplicate():
         design_sheet.delete_rows(r)
 
     return jsonify({"deleted_rows":len(delete)})
-
-# ---------------- REPORT ----------------
 
 @app.route("/report/available")
 def report():

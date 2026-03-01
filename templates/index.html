@@ -10,7 +10,6 @@
 :root{
   --primary:#071a3a;
   --primary2:#0b2d66;
-  --primary-light:#11408f;
   --secondary:#1fbf6b;
   --danger:#e74c3c;
   --border:#cfe0ff;
@@ -25,7 +24,6 @@ header{
   display:flex;align-items:center;gap:14px;
   border-bottom:4px solid var(--secondary);
 }
-
 .logo{
   width:40px;height:40px;border-radius:12px;
   background:linear-gradient(135deg,var(--secondary),#2ecc71);
@@ -74,13 +72,14 @@ input,select{
   background:linear-gradient(135deg,var(--secondary),#2ecc71);
   color:white;
 }
-.btn.dark{background:linear-gradient(135deg,var(--primary2),var(--primary-light));}
+.btn.dark{background:linear-gradient(135deg,var(--primary2),#11408f);}
 .btn.danger{background:linear-gradient(135deg,var(--danger),#c0392b);}
 
 .loading-overlay{
   position:fixed;inset:0;
   background:rgba(0,0,0,.6);
   display:none;align-items:center;justify-content:center;
+  z-index:999;
 }
 .loading-overlay.show{display:flex;}
 .loading-spinner{
@@ -92,26 +91,32 @@ input,select{
 }
 @keyframes spin{to{transform:rotate(360deg);}}
 
-.sms-dialog-overlay{
-  position:fixed;inset:0;
-  background:rgba(0,0,0,.6);
+/* SMS MODAL */
+.sms-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
   display:none;align-items:center;justify-content:center;
+  z-index:1000;
 }
-.sms-dialog-overlay.show{display:flex;}
-.sms-dialog-box{
+.sms-overlay.show{display:flex;}
+.sms-box{
   background:linear-gradient(135deg,var(--primary),var(--primary2));
   color:white;padding:30px 40px;
   border-radius:20px;text-align:center;
   border:3px solid var(--secondary);
+  min-width:320px;
 }
-.sms-dialog-title{font-weight:900;margin-bottom:10px;}
-.sms-dialog-btn{
-  margin-top:15px;
-  background:var(--secondary);
-  border:none;padding:8px 20px;
-  border-radius:999px;font-weight:900;
-  cursor:pointer;
+.sms-box input{
+  margin-top:10px;
 }
+.sms-actions{
+  margin-top:15px;display:flex;gap:10px;justify-content:center;
+}
+.sms-btn{
+  border:none;padding:8px 20px;border-radius:999px;
+  font-weight:900;cursor:pointer;
+}
+.sms-ok{background:var(--secondary);color:white;}
+.sms-cancel{background:var(--danger);color:white;}
 </style>
 </head>
 
@@ -121,11 +126,15 @@ input,select{
 <div class="loading-spinner"></div>
 </div>
 
-<div class="sms-dialog-overlay" id="smsDialog">
-<div class="sms-dialog-box">
-<div class="sms-dialog-title">SMS says</div>
+<div class="sms-overlay" id="smsOverlay">
+<div class="sms-box">
+<div id="smsTitle" style="font-weight:900;margin-bottom:10px;">SMS says</div>
 <div id="smsMessage"></div>
-<button class="sms-dialog-btn" onclick="closeSMS()">OK</button>
+<input id="smsInput" style="display:none;">
+<div class="sms-actions">
+<button class="sms-btn sms-ok" id="smsOk">OK</button>
+<button class="sms-btn sms-cancel" id="smsCancel" style="display:none;">Cancel</button>
+</div>
 </div>
 </div>
 
@@ -144,7 +153,6 @@ input,select{
 <div class="tab" data-tab="report">REPORT</div>
 </div>
 
-<!-- ADD -->
 <div id="add" class="zone active">
 <div class="scroll-zone">
 <table>
@@ -159,23 +167,19 @@ input,select{
 <tbody id="addGrid"></tbody>
 </table>
 </div>
-
 <div class="actions">
 <button id="addBtn" class="btn"><i class="fas fa-upload"></i> SUBMIT ADD</button>
 <button id="dedupeBtn" class="btn danger"><i class="fas fa-trash"></i> DE-DUPLICATE</button>
 </div>
 </div>
 
-<!-- REPORT -->
 <div id="report" class="zone">
-
 <div class="actions">
 <input id="searchBox" placeholder="Search design..." style="flex:1;">
-<button id="loadReportBtn" class="btn dark"><i class="fas fa-sync"></i> LOAD REPORT</button>
-<button id="excelBtn" class="btn dark"><i class="fas fa-file-excel"></i> EXPORT EXCEL</button>
-<button id="printBtn" class="btn dark"><i class="fas fa-print"></i> PRINT</button>
+<button id="loadReportBtn" class="btn dark">LOAD REPORT</button>
+<button id="excelBtn" class="btn dark">EXPORT EXCEL</button>
+<button id="printBtn" class="btn dark">PRINT</button>
 </div>
-
 <div class="scroll-zone">
 <table>
 <thead>
@@ -195,14 +199,34 @@ input,select{
 </div>
 
 <script>
-
 const addGrid=document.getElementById("addGrid");
 const reportGrid=document.getElementById("reportGrid");
 
-function showLoading(){document.getElementById("loadingOverlay").classList.add("show");}
-function hideLoading(){document.getElementById("loadingOverlay").classList.remove("show");}
-function showSMS(m){document.getElementById("smsMessage").innerText=m;document.getElementById("smsDialog").classList.add("show");}
-function closeSMS(){document.getElementById("smsDialog").classList.remove("show");}
+function showLoading(){loadingOverlay.classList.add("show");}
+function hideLoading(){loadingOverlay.classList.remove("show");}
+
+function smsAlert(msg){
+document.getElementById("smsMessage").innerText=msg;
+document.getElementById("smsInput").style.display="none";
+document.getElementById("smsCancel").style.display="none";
+smsOverlay.classList.add("show");
+}
+
+function smsPrompt(msg,callback){
+document.getElementById("smsMessage").innerText=msg;
+const input=document.getElementById("smsInput");
+input.value="";
+input.style.display="block";
+document.getElementById("smsCancel").style.display="inline-block";
+smsOverlay.classList.add("show");
+smsOk.onclick=()=>{
+smsOverlay.classList.remove("show");
+callback(input.value.trim());
+};
+smsCancel.onclick=()=>smsOverlay.classList.remove("show");
+}
+
+smsOk.onclick=()=>smsOverlay.classList.remove("show");
 
 document.querySelectorAll(".tab").forEach(tab=>{
 tab.onclick=()=>{
@@ -216,44 +240,45 @@ document.getElementById(tab.dataset.tab).classList.add("active");
 async function buildRows(){
 const res=await fetch("/categories");
 const cats=(await res.json()).categories;
+const frag=document.createDocumentFragment();
 
 for(let i=0;i<30;i++){
-addGrid.innerHTML+=`
-<tr>
+const tr=document.createElement("tr");
+tr.innerHTML=`
 <td><input type="file" class="img"></td>
 <td><input class="design"></td>
 <td><input class="mrp"></td>
 <td>
-<select class="cat" onchange="handleCat(this)">
+<select class="cat">
 <option value="">Select Category</option>
 ${cats.map(c=>`<option>${c}</option>`).join("")}
 <option value="__add__">Add Category</option>
 </select>
-</td>
-</tr>`;
+</td>`;
+frag.appendChild(tr);
 }
+addGrid.appendChild(frag);
 }
 buildRows();
 
-function handleCat(sel){
-if(sel.value==="__add__"){
-const n=prompt("Enter New Category (ENG)");
-if(n){
-const v=n.toUpperCase();
+addGrid.addEventListener("change",function(e){
+if(e.target.classList.contains("cat") && e.target.value==="__add__"){
+smsPrompt("Enter New Category (ENG)",val=>{
+if(val){
+const v=val.toUpperCase();
 const opt=document.createElement("option");
 opt.value=v;opt.text=v;
-sel.add(opt,sel.options[sel.options.length-1]);
-sel.value=v;
-}else{sel.value="";}
+e.target.add(opt,e.target.options[e.target.options.length-1]);
+e.target.value=v;
 }
+});
 }
+});
 
 document.getElementById("addBtn").onclick=async()=>{
 showLoading();
 let entries=[];
-document.querySelectorAll("#addGrid tr").forEach(async r=>{});
-const rows=document.querySelectorAll("#addGrid tr");
-for(let r of rows){
+for(let r of addGrid.querySelectorAll("tr")){
 const img=r.querySelector(".img").files[0];
 const design=r.querySelector(".design").value.trim();
 const mrp=r.querySelector(".mrp").value.trim();
@@ -267,57 +292,46 @@ if(entries.length){
 await fetch("/render",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({entries})});
 }
 hideLoading();
-showSMS("Upload Complete");
+smsAlert("Upload Complete");
 };
 
 document.getElementById("dedupeBtn").onclick=async()=>{
 showLoading();
 await fetch("/deduplicate",{method:"POST"});
 hideLoading();
-showSMS("Duplicates Removed");
+smsAlert("Duplicates Removed");
 };
 
-document.getElementById("loadReportBtn").onclick=loadReport;
-
-async function loadReport(){
+document.getElementById("loadReportBtn").onclick=async()=>{
 showLoading();
 const res=await fetch("/report/available");
 const data=await res.json();
 hideLoading();
 reportGrid.innerHTML="";
+const frag=document.createDocumentFragment();
 data.data.forEach(r=>{
-reportGrid.innerHTML+=`
-<tr>
+const tr=document.createElement("tr");
+tr.innerHTML=`
 <td>${r["CAT (BANGLA)"]}</td>
 <td>${r["CAT(ENG)"]}</td>
 <td>${r["DESIGN NAME"]}</td>
 <td>${r["MRP"]}</td>
 <td>
-<select onchange="toggleAvail('${r["DESIGN NAME"]}',this.value)">
+<select>
 <option value="YES" ${r["AVAILABILITY"]==="YES"?"selected":""}>YES</option>
 <option value="NO" ${r["AVAILABILITY"]==="NO"?"selected":""}>NO</option>
 </select>
-</td>
-</tr>`;
+</td>`;
+tr.querySelector("select").onchange=(e)=>{
+fetch("/availability",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:r["DESIGN NAME"],status:e.target.value})});
+};
+frag.appendChild(tr);
 });
-}
-
-async function toggleAvail(d,s){
-await fetch("/availability",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:d,status:s})});
-}
-
-document.getElementById("excelBtn").onclick=()=>{
-window.location="/report/export/excel";
+reportGrid.appendChild(frag);
 };
 
+document.getElementById("excelBtn").onclick=()=>window.location="/report/export/excel";
 document.getElementById("printBtn").onclick=()=>window.print();
-
-document.getElementById("searchBox").addEventListener("input",function(){
-const val=this.value.toLowerCase();
-document.querySelectorAll("#reportGrid tr").forEach(r=>{
-r.style.display=r.innerText.toLowerCase().includes(val)?"":"none";
-});
-});
 
 function fileToBase64(file){
 return new Promise((resolve,reject)=>{
@@ -327,7 +341,6 @@ reader.onerror=reject;
 reader.readAsDataURL(file);
 });
 }
-
 </script>
 </body>
 </html>

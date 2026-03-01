@@ -76,6 +76,9 @@ input,select{
 .btn.dark{
   background:linear-gradient(135deg,var(--primary2),var(--primary-light));
 }
+.btn.danger{
+  background:linear-gradient(135deg,var(--danger),#c0392b);
+}
 
 .loading-overlay{
   position:fixed;inset:0;
@@ -92,6 +95,47 @@ input,select{
   animation:spin 1s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg);}}
+
+/* SMS CENTER DIALOG */
+.sms-dialog-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.6);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:10000;
+}
+.sms-dialog-overlay.show{display:flex;}
+.sms-dialog-box{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:white;
+  padding:30px 40px;
+  border-radius:20px;
+  text-align:center;
+  max-width:420px;
+  width:90%;
+  border:3px solid var(--secondary);
+  box-shadow:0 20px 60px rgba(0,0,0,.4);
+}
+.sms-dialog-title{
+  font-weight:900;
+  font-size:18px;
+  margin-bottom:14px;
+}
+.sms-dialog-message{
+  font-weight:900;
+  font-size:14px;
+  margin-bottom:20px;
+}
+.sms-dialog-btn{
+  background:var(--secondary);
+  border:none;
+  padding:10px 24px;
+  border-radius:999px;
+  font-weight:900;
+  cursor:pointer;
+}
 </style>
 </head>
 
@@ -99,6 +143,14 @@ input,select{
 
 <div class="loading-overlay" id="loadingOverlay">
   <div class="loading-spinner"></div>
+</div>
+
+<div class="sms-dialog-overlay" id="smsDialog">
+  <div class="sms-dialog-box">
+    <div class="sms-dialog-title">SMS says</div>
+    <div class="sms-dialog-message" id="smsMessage"></div>
+    <button class="sms-dialog-btn" onclick="closeSMSDialog()">OK</button>
+  </div>
 </div>
 
 <header>
@@ -116,7 +168,6 @@ input,select{
   <div class="tab" data-tab="report">REPORT</div>
 </div>
 
-<!-- ADD TAB -->
 <div id="add" class="zone active">
 <div class="scroll-zone">
 <table>
@@ -133,10 +184,10 @@ input,select{
 </div>
 <div class="actions">
 <button id="addBtn" class="btn"><i class="fas fa-upload"></i> SUBMIT ADD</button>
+<button id="dedupeBtn" class="btn danger"><i class="fas fa-trash"></i> DE-DUPLICATE</button>
 </div>
 </div>
 
-<!-- REPORT TAB -->
 <div id="report" class="zone">
 <div class="actions">
 <input id="searchBox" placeholder="Search design..."
@@ -162,15 +213,21 @@ style="flex:1;padding:10px;border-radius:30px;border:1px solid var(--border);fon
 </div>
 
 <script>
-
 const loadingOverlay=document.getElementById("loadingOverlay");
 const addGrid=document.getElementById("addGrid");
 const reportGrid=document.getElementById("reportGrid");
 const searchBox=document.getElementById("searchBox");
-const addBtn=document.getElementById("addBtn");
 
 function showLoading(){ loadingOverlay.classList.add("show"); }
 function hideLoading(){ loadingOverlay.classList.remove("show"); }
+
+function showSMS(msg){
+  document.getElementById("smsMessage").innerText=msg;
+  document.getElementById("smsDialog").classList.add("show");
+}
+function closeSMSDialog(){
+  document.getElementById("smsDialog").classList.remove("show");
+}
 
 document.querySelectorAll(".tab").forEach(tab=>{
   tab.onclick=()=>{
@@ -185,7 +242,6 @@ document.querySelectorAll(".tab").forEach(tab=>{
 async function buildRows(){
   const res=await fetch("/categories");
   const cats=(await res.json()).categories;
-
   for(let i=0;i<30;i++){
     addGrid.innerHTML+=`
     <tr>
@@ -193,10 +249,9 @@ async function buildRows(){
     <td><input class="design"></td>
     <td><input class="mrp"></td>
     <td>
-      <select class="cat" onchange="handleCategory(this)">
-        <option value="">Select Cat / Add Category</option>
+      <select class="cat">
+        <option value="">Select Category</option>
         ${cats.map(c=>`<option>${c}</option>`).join("")}
-        <option value="__add__">Add Category</option>
       </select>
     </td>
     </tr>`;
@@ -204,49 +259,32 @@ async function buildRows(){
 }
 buildRows();
 
-function handleCategory(select){
-  if(select.value==="__add__"){
-    const newCat=prompt("Enter New Category (ENG)");
-    if(newCat){
-      const val=newCat.toUpperCase();
-      const option=document.createElement("option");
-      option.text=val;
-      option.value=val;
-      select.add(option, select.options[select.options.length-1]);
-      select.value=val;
-    }else{
-      select.value="";
-    }
-  }
-}
-
-addBtn.onclick=async ()=>{
+document.getElementById("addBtn").onclick=async ()=>{
   showLoading();
   const rows=document.querySelectorAll("#addGrid tr");
   let entries=[];
-
   for(let r of rows){
     const img=r.querySelector(".img").files[0];
     const design=r.querySelector(".design").value.trim();
     const mrp=r.querySelector(".mrp").value.trim();
     const cat=r.querySelector(".cat").value.trim();
-
     if(img && design && mrp && cat){
       const base64=await fileToBase64(img);
       entries.push({image:base64,design,mrp,category_eng:cat});
     }
   }
-
   if(entries.length){
-    await fetch("/render",{
-      method:"POST",
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({entries})
-    });
+    await fetch("/render",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({entries})});
   }
-
   hideLoading();
-  alert("Upload Complete");
+  showSMS("Upload Complete");
+};
+
+document.getElementById("dedupeBtn").onclick=async ()=>{
+  showLoading();
+  await fetch("/deduplicate",{method:"POST"});
+  hideLoading();
+  showSMS("Duplicates Removed. Latest Entries Preserved.");
 };
 
 async function loadReport(){
@@ -254,7 +292,6 @@ async function loadReport(){
   const res=await fetch("/report/available");
   const data=await res.json();
   hideLoading();
-
   reportGrid.innerHTML="";
   data.data.forEach(r=>{
     reportGrid.innerHTML+=`
@@ -274,11 +311,7 @@ async function loadReport(){
 }
 
 async function toggleAvail(design,status){
-  await fetch("/availability",{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({design,status})
-  });
+  await fetch("/availability",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design,status})});
 }
 
 searchBox.addEventListener("input",function(){
@@ -289,27 +322,7 @@ searchBox.addEventListener("input",function(){
 });
 
 function printReport(){
-  let html=`<h2 style="text-align:center;font-weight:900;">
-  SMS_CATALOGER<br>Offices of Nawnit Nihal</h2>
-  <table border="1" style="width:100%;border-collapse:collapse;">
-  <tr><th>CAT (BANGLA)</th><th>CAT(ENG)</th>
-  <th>DESIGN NAME</th><th>MRP</th></tr>`;
-
-  document.querySelectorAll("#reportGrid tr").forEach(r=>{
-    if(r.style.display!=="none"){
-      html+=`<tr>
-      <td>${r.cells[0].innerText}</td>
-      <td>${r.cells[1].innerText}</td>
-      <td>${r.cells[2].innerText}</td>
-      <td>${r.cells[3].innerText}</td>
-      </tr>`;
-    }
-  });
-
-  html+="</table>";
-  const w=window.open("");
-  w.document.write(html);
-  w.print();
+  window.print();
 }
 
 function fileToBase64(file){
@@ -320,7 +333,6 @@ function fileToBase64(file){
     reader.readAsDataURL(file);
   });
 }
-
 </script>
 </body>
 </html>

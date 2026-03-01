@@ -175,10 +175,11 @@ def render():
 
     return jsonify({"ok":True})
 
+# FIXED: Report endpoint now returns array directly
 @app.route("/report/available")
 def report():
-    if time.time() - REPORT_CACHE["time"] < 10:
-        return jsonify({"data": REPORT_CACHE["data"]})
+    if time.time() - REPORT_CACHE["time"] < 10 and REPORT_CACHE["data"] is not None:
+        return jsonify(REPORT_CACHE["data"])
 
     design = design_sheet.col_values(2)[1:]
     mrp = design_sheet.col_values(3)[1:]
@@ -200,7 +201,7 @@ def report():
     REPORT_CACHE["data"] = result
     REPORT_CACHE["time"] = time.time()
 
-    return jsonify({"data": result})
+    return jsonify(result)  # Return array directly, not wrapped in "data"
 
 @app.route("/availability",methods=["POST"])
 def availability():

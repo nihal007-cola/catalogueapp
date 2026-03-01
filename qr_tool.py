@@ -93,10 +93,13 @@ def upload_to_drive(path, filename):
 
 def update_availability(value, status):
     value = value.strip().upper()
-    data = design_sheet.get_all_values()
-    for idx, row in enumerate(data[1:], start=2):
-        if value == row[COLUMN_INDEX["DESNO"]-1] or value == row[COLUMN_INDEX["DESIGN NAME"]-1].upper():
-            design_sheet.update(f"E{idx}:E{idx}", [[status]])
+    desno_col = design_sheet.col_values(COLUMN_INDEX["DESNO"])[1:]
+    design_col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])[1:]
+
+    for idx in range(len(desno_col)):
+        if value == desno_col[idx] or value == design_col[idx].upper():
+            row_number = idx + 2
+            design_sheet.update(f"E{row_number}:E{row_number}", [[status]])
             return True
     return False
 
@@ -179,17 +182,22 @@ def availability():
 
 @app.route("/report/available")
 def report():
-    data = design_sheet.get_all_values()
-    rows = data[1:]
+    cat_bangla = design_sheet.col_values(COLUMN_INDEX["CAT (BANGLA)"])[1:]
+    cat_eng = design_sheet.col_values(COLUMN_INDEX["CAT(ENG)"])[1:]
+    design = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])[1:]
+    mrp = design_sheet.col_values(COLUMN_INDEX["MRP"])[1:]
+    availability = design_sheet.col_values(COLUMN_INDEX["AVAILABILITY"])[1:]
+
     result = []
-    for r in rows:
+    for i in range(len(design)):
         result.append({
-            "CAT (BANGLA)":r[COLUMN_INDEX["CAT (BANGLA)"]-1],
-            "CAT(ENG)":r[COLUMN_INDEX["CAT(ENG)"]-1],
-            "DESIGN NAME":r[COLUMN_INDEX["DESIGN NAME"]-1],
-            "MRP":r[COLUMN_INDEX["MRP"]-1],
-            "AVAILABILITY":r[COLUMN_INDEX["AVAILABILITY"]-1],
+            "CAT (BANGLA)": cat_bangla[i] if i < len(cat_bangla) else "",
+            "CAT(ENG)": cat_eng[i] if i < len(cat_eng) else "",
+            "DESIGN NAME": design[i] if i < len(design) else "",
+            "MRP": mrp[i] if i < len(mrp) else "",
+            "AVAILABILITY": availability[i] if i < len(availability) else ""
         })
+
     return jsonify({"data":result})
 
 if __name__=="__main__":

@@ -40,6 +40,7 @@ HEADERS = [
     "PDF NAME","DESIGN NAME","MRP","LINK","AVAILABILITY",
     "DES-FORMAT","DESNO","CAT(ENG)","CAT (BANGLA)","ID"
 ]
+
 COLUMN_INDEX = {h:i+1 for i,h in enumerate(HEADERS)}
 
 CATEGORY_MASTER = {
@@ -53,6 +54,8 @@ CATEGORY_MASTER = {
 }
 
 lock = Lock()
+
+# ---------------- UTILITIES ----------------
 
 def normalize_design(d):
     d = d.strip().upper()
@@ -71,11 +74,12 @@ def extract_format(design):
 
 def get_next_id():
     col = design_sheet.col_values(COLUMN_INDEX["ID"])[1:]
-    used = set([c.strip() for c in col if c.strip() in string.ascii_uppercase])
-    for letter in string.ascii_uppercase:
-        if letter not in used:
-            return letter
-    return None
+    letters = [c for c in col if c.strip() in string.ascii_uppercase]
+    if not letters:
+        return "A"
+    last = sorted(letters)[-1]
+    idx = string.ascii_uppercase.index(last)
+    return string.ascii_uppercase[idx+1] if idx < 25 else last
 
 def upload_to_drive(path, filename):
     meta = {"name":filename,"parents":[PARENT_FOLDER_ID]}
@@ -84,24 +88,15 @@ def upload_to_drive(path, filename):
         body=meta,media_body=media,fields="id"
     ).execute()
     file_id = file.get("id")
+
     drive_service.permissions().create(
         fileId=file_id,
         body={"role":"reader","type":"anyone"}
     ).execute()
-    link = f"https://drive.google.com/file/d/{file_id}/view"
-    return file_id, link
 
-def update_availability(value, status):
-    value = value.strip().upper()
-    desno_col = design_sheet.col_values(COLUMN_INDEX["DESNO"])[1:]
-    design_col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])[1:]
+    return file_id, f"https://drive.google.com/file/d/{file_id}/view"
 
-    for idx in range(len(desno_col)):
-        if value == desno_col[idx] or value == design_col[idx].upper():
-            row_number = idx + 2
-            design_sheet.update(f"E{row_number}:E{row_number}", [[status]])
-            return True
-    return False
+# ---------------- ROUTES ----------------
 
 @app.route("/")
 def home():
@@ -127,13 +122,16 @@ def render():
             mrp = item.get("mrp")
             cat_eng = item.get("category_eng","").upper().strip()
 
+            if not image_data or not design_raw or not mrp or not cat_eng:
+                continue
+
             design = normalize_design(design_raw)
             desno = extract_desno(design)
             des_format = extract_format(design)
 
             if cat_eng not in CATEGORY_MASTER:
                 new_id = get_next_id()
-                CATEGORY_MASTER[cat_eng] = (cat_eng, new_id)
+                CATEGORY_MASTER[cat_eng] = (cat_eng,new_id)
 
             cat_bangla, cat_id = CATEGORY_MASTER[cat_eng]
 
@@ -170,35 +168,45 @@ def render():
             ])
 
         if rows_to_append:
-            design_sheet.append_rows(rows_to_append, value_input_option="RAW")
+            design_sheet.append_rows(rows_to_append,value_input_option="RAW")
 
     return jsonify({"ok":True})
 
-@app.route("/availability",methods=["POST"])
-def availability():
-    val = request.json.get("design","")
-    status = request.json.get("status","YES")
-    return jsonify({"ok":update_availability(val,status)})
-
 @app.route("/report/available")
 def report():
-    cat_bangla = design_sheet.col_values(COLUMN_INDEX["CAT (BANGLA)"])[1:]
-    cat_eng = design_sheet.col_values(COLUMN_INDEX["CAT(ENG)"])[1:]
-    design = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])[1:]
-    mrp = design_sheet.col_values(COLUMN_INDEX["MRP"])[1:]
-    availability = design_sheet.col_values(COLUMN_INDEX["AVAILABILITY"])[1:]
-
+    data = design_sheet.get_all_values()
+    rows = data[1:]
     result = []
-    for i in range(len(design)):
+
+    for r in rows:
         result.append({
-            "CAT (BANGLA)": cat_bangla[i] if i < len(cat_bangla) else "",
-            "CAT(ENG)": cat_eng[i] if i < len(cat_eng) else "",
-            "DESIGN NAME": design[i] if i < len(design) else "",
-            "MRP": mrp[i] if i < len(mrp) else "",
-            "AVAILABILITY": availability[i] if i < len(availability) else ""
+            "CAT (BANGLA)":r[COLUMN_INDEX["CAT (BANGLA)"]-1],
+            "CAT(ENG)":r[COLUMN_INDEX["CAT(ENG)"]-1],
+            "DESIGN NAME":r[COLUMN_INDEX["DESIGN NAME"]-1],
+            "MRP":r[COLUMN_INDEX["MRP"]-1],
+            "AVAILABILITY":r[COLUMN_INDEX["AVAILABILITY"]-1]
         })
 
     return jsonify({"data":result})
+
+@app.route("/availability",methods=["POST"])
+def availability():
+    data = request.json
+    design = data.get("design","").strip().upper()
+    status = data.get("status","").strip().upper()
+
+    if status not in ["YES","NO"]:
+        return jsonify({"ok":False})
+
+    all_rows = design_sheet.get_all_values()
+
+    for idx,row in enumerate(all_rows[1:],start=2):
+        if design == row[COLUMN_INDEX["DESIGN NAME"]-1].upper():
+            col_letter = chr(64 + COLUMN_INDEX["AVAILABILITY"])
+            design_sheet.update(f"{col_letter}{idx}",status)
+            return jsonify({"ok":True})
+
+    return jsonify({"ok":False})
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",10000))

@@ -4,29 +4,37 @@
 <meta charset="UTF-8">
 <title>SMS Cataloger</title>
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
 <style>
+
+/* ===== ROOT ===== */
 :root{
-  --dark:#071a3a;
-  --dark2:#0b2d66;
-  --accent:#1fbf6b;
+  --primary:#071a3a;
+  --primary2:#0b2d66;
+  --primary-light:#11408f;
+  --secondary:#1fbf6b;
+  --danger:#e74c3c;
   --border:#cfe0ff;
   --bg:#eef4ff;
-  --danger:#e74c3c;
+  --text-dark:#1f2a3a;
 }
+
+/* ===== BASIC ===== */
 *{box-sizing:border-box;font-family:Segoe UI,Arial;}
 body{margin:0;background:var(--bg);}
 
 header{
   position:sticky;top:0;
-  background:linear-gradient(135deg,var(--dark),var(--dark2));
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
   color:white;padding:18px 24px;
   display:flex;align-items:center;gap:14px;
-  border-bottom:4px solid var(--accent);
-  z-index:100;
+  border-bottom:4px solid var(--secondary);
 }
+
 .logo{
   width:40px;height:40px;border-radius:12px;
-  background:linear-gradient(135deg,var(--accent),#2ecc71);
+  background:linear-gradient(135deg,var(--secondary),#2ecc71);
   display:flex;align-items:center;justify-content:center;
   font-weight:900;color:#07321c;
 }
@@ -37,17 +45,19 @@ header{
   box-shadow:0 10px 30px rgba(0,0,0,.05);
 }
 
+/* ===== TABS ===== */
 .tabs{display:flex;gap:12px;margin-bottom:18px;}
 .tab{
   padding:10px 22px;border-radius:999px;
   border:1px solid var(--border);cursor:pointer;
   font-weight:900;background:white;
 }
-.tab.active{background:var(--dark);color:white;border-color:var(--dark);}
+.tab.active{background:var(--primary);color:white;border-color:var(--primary);}
 
 .zone{display:none;}
 .zone.active{display:block;}
 
+/* ===== TABLE ===== */
 .scroll-zone{
   max-height:65vh;overflow:auto;
   border:1px solid var(--border);
@@ -56,7 +66,7 @@ header{
 
 table{width:100%;border-collapse:collapse;font-size:12px;}
 th,td{border:1px solid var(--border);padding:8px;font-weight:900;}
-th{background:var(--dark);color:white;position:sticky;top:0;z-index:5;}
+th{background:var(--primary);color:white;position:sticky;top:0;}
 
 input,select{
   width:100%;padding:6px;border-radius:8px;
@@ -67,52 +77,81 @@ input,select{
 .actions{margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;}
 
 .btn{
-  padding:10px 20px;border-radius:10px;
-  border:none;font-weight:900;cursor:pointer;
-  background:var(--accent);
+  border:none;border-radius:12px;padding:11px 14px;
+  font-weight:900;cursor:pointer;
+  display:inline-flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,var(--secondary),#2ecc71);
+  color:white;
 }
-.btn.dark{background:var(--dark);color:white;}
-.btn.red{background:var(--danger);color:white;}
-.btn:disabled{opacity:.6;cursor:not-allowed;}
+.btn.dark{
+  background:linear-gradient(135deg,var(--primary2),var(--primary-light));
+}
+.btn.danger{
+  background:linear-gradient(135deg,#ff5c5c,#e74c3c);
+}
 
+/* ===== LOADING OVERLAY ===== */
 .loading-overlay{
   position:fixed;inset:0;
-  background:rgba(0,0,0,.6);
+  background:rgba(0,0,0,.7);
   display:none;align-items:center;justify-content:center;
-  backdrop-filter:blur(4px);z-index:9999;
+  z-index:9999;
 }
 .loading-overlay.show{display:flex;}
 
-.modal{
-  position:fixed;inset:0;background:rgba(0,0,0,.6);
+.loading-spinner{
+  width:60px;height:60px;
+  border:5px solid rgba(255,255,255,.3);
+  border-radius:50%;
+  border-top-color:var(--secondary);
+  animation:spin 1s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ===== DIALOG ===== */
+.dlg-backdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,0.45);
   display:none;align-items:center;justify-content:center;
-  z-index:99999;
+  z-index:3000;padding:14px;
 }
-.modal.show{display:flex;}
-.modal-box{
-  background:white;padding:30px;border-radius:16px;
-  width:400px;text-align:center;font-weight:900;
+.dlg{
+  width:min(560px,94vw);background:#fff;border-radius:18px;
+  box-shadow:0 30px 80px rgba(0,0,0,0.28);overflow:hidden;
 }
-.toast{
-  position:fixed;bottom:20px;right:20px;
-  background:var(--dark);color:white;
-  padding:12px 20px;border-radius:10px;
-  font-weight:900;z-index:99999;
+.dlg-head{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;padding:14px 16px;border-bottom:3px solid var(--secondary);
+  display:flex;align-items:center;justify-content:space-between;
 }
+.dlg-title{font-weight:900;display:flex;gap:10px;align-items:center;}
+.dlg-body{padding:14px 16px;}
+.dlg-msg{font-weight:900;color:var(--text-dark);}
+.dlg-actions{
+  padding:12px 16px;background:#f5f9ff;
+  display:flex;justify-content:flex-end;gap:10px;
+}
+.dlg-x{border:none;border-radius:12px;background:rgba(255,255,255,0.15);
+  color:#fff;padding:8px 12px;font-weight:900;cursor:pointer;}
 </style>
 </head>
 
 <body>
 
-<div id="loader" class="loading-overlay">
+<div class="loading-overlay" id="loadingOverlay">
   <div class="loading-spinner"></div>
 </div>
 
-<div id="modal" class="modal">
-  <div class="modal-box">
-    <div id="modalText"></div>
-    <br>
-    <button class="btn dark" onclick="closeModal()">OK</button>
+<!-- SMS Dialog -->
+<div class="dlg-backdrop" id="dlgBackdrop">
+  <div class="dlg">
+    <div class="dlg-head">
+      <div class="dlg-title" id="dlgTitle"></div>
+      <button class="dlg-x" onclick="dlgClose()"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="dlg-body">
+      <div class="dlg-msg" id="dlgMsg"></div>
+    </div>
+    <div class="dlg-actions" id="dlgActions"></div>
   </div>
 </div>
 
@@ -128,8 +167,6 @@ input,select{
 
 <div class="tabs">
   <div class="tab active" data-tab="add">ADD</div>
-  <div class="tab" data-tab="remove">REMOVE</div>
-  <div class="tab" data-tab="restock">RESTOCK</div>
   <div class="tab" data-tab="report">REPORT</div>
 </div>
 
@@ -148,41 +185,17 @@ input,select{
 <tbody id="addGrid"></tbody>
 </table>
 </div>
-
 <div class="actions">
-<button id="addBtn" class="btn">SUBMIT ADD</button>
-</div>
-</div>
-
-<!-- REMOVE -->
-<div id="remove" class="zone">
-<div class="scroll-zone">
-<table><thead><tr><th>Numeric Only</th></tr></thead>
-<tbody id="removeGrid"></tbody></table>
-</div>
-<div class="actions">
-<button id="removeBtn" class="btn">SUBMIT REMOVE</button>
-</div>
-</div>
-
-<!-- RESTOCK -->
-<div id="restock" class="zone">
-<div class="scroll-zone">
-<table><thead><tr><th>Numeric Only</th></tr></thead>
-<tbody id="restockGrid"></tbody></table>
-</div>
-<div class="actions">
-<button id="restockBtn" class="btn">SUBMIT RESTOCK</button>
+<button id="addBtn" class="btn"><i class="fas fa-upload"></i> SUBMIT ADD</button>
 </div>
 </div>
 
 <!-- REPORT -->
 <div id="report" class="zone">
 <div class="actions">
-<button class="btn dark" onclick="loadReport()">LOAD</button>
-<button class="btn" onclick="exportCSV()">CSV</button>
-<button class="btn" onclick="exportExcel()">Excel</button>
-<button class="btn red" onclick="exportJSON()">JSON</button>
+<input id="searchBox" placeholder="Search design..." 
+style="flex:1;padding:10px;border-radius:30px;border:1px solid var(--border);font-weight:900;">
+<button class="btn dark" onclick="printReport()"><i class="fas fa-print"></i> PRINT</button>
 </div>
 <div class="scroll-zone">
 <table>
@@ -192,6 +205,7 @@ input,select{
 <th>CAT(ENG)</th>
 <th>DESIGN NAME</th>
 <th>MRP</th>
+<th>AVAILABILITY</th>
 </tr>
 </thead>
 <tbody id="reportGrid"></tbody>
@@ -203,181 +217,216 @@ input,select{
 
 <script>
 
-/* UTILITIES */
-function showLoader(){loader.classList.add("show")}
-function hideLoader(){loader.classList.remove("show")}
-function showModal(msg){
-modalText.innerText=msg;
-modal.classList.add("show");
+/* ===== DIALOG SYSTEM ===== */
+function dlgOpen({title="Message", msg="-", icon="fa-circle-info", buttons=[]}){
+  dlgTitle.innerHTML=`<i class="fas ${icon}"></i> ${title}`;
+  dlgMsg.innerHTML=msg;
+  dlgActions.innerHTML="";
+  if(!buttons.length){
+    buttons=[{label:"OK", type:"dark", onClick:()=>dlgClose()}];
+  }
+  buttons.forEach(b=>{
+    const btn=document.createElement("button");
+    btn.className="btn "+(b.type||"dark");
+    btn.innerHTML=`${b.label}`;
+    btn.onclick=()=>{ b.onClick && b.onClick(); };
+    dlgActions.appendChild(btn);
+  });
+  dlgBackdrop.style.display="flex";
 }
-function closeModal(){modal.classList.remove("show")}
-function toast(msg){
-const t=document.createElement("div");
-t.className="toast";
-t.innerText=msg;
-document.body.appendChild(t);
-setTimeout(()=>t.remove(),2500);
-}
+function dlgClose(){ dlgBackdrop.style.display="none"; }
 
-/* TAB SWITCH */
+/* ===== LOADER ===== */
+function showLoading(){ loadingOverlay.classList.add("show"); }
+function hideLoading(){ loadingOverlay.classList.remove("show"); }
+
+/* ===== TABS ===== */
 document.querySelectorAll(".tab").forEach(tab=>{
-tab.onclick=()=>{
-document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
-tab.classList.add("active");
-document.getElementById(tab.dataset.tab).classList.add("active");
-};
+  tab.onclick=()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById(tab.dataset.tab).classList.add("active");
+  };
 });
 
-/* BUILD GRID */
+/* ===== BUILD ADD GRID ===== */
 async function buildRows(){
-const res=await fetch("/categories");
-const cats=(await res.json()).categories;
+  const res=await fetch("/categories");
+  const cats=(await res.json()).categories;
 
-for(let i=0;i<30;i++){
-addGrid.innerHTML+=`
-<tr>
-<td><input type="file" class="img"></td>
-<td><input class="design"></td>
-<td><input class="mrp"></td>
-<td>
-<select class="cat">
-<option value="">Select Cat / Add Category</option>
-${cats.map(c=>`<option>${c}</option>`).join("")}
-<option value="__add__">Add Category</option>
-</select>
-</td>
-</tr>`;
-removeGrid.innerHTML+=`<tr><td><input class="r_design"></td></tr>`;
-restockGrid.innerHTML+=`<tr><td><input class="s_design"></td></tr>`;
-}
+  for(let i=0;i<30;i++){
+    addGrid.innerHTML+=`
+    <tr>
+    <td><input type="file" class="img"></td>
+    <td><input class="design"></td>
+    <td><input class="mrp"></td>
+    <td>
+      <select class="cat">
+        <option value="">Select Cat / Add Category</option>
+        ${cats.map(c=>`<option>${c}</option>`).join("")}
+        <option value="__add__">Add Category</option>
+      </select>
+    </td>
+    </tr>`;
+  }
 }
 buildRows();
 
-/* ADD CATEGORY */
+/* ===== ADD CATEGORY SMS DIALOG ===== */
 document.addEventListener("change",function(e){
-if(e.target.classList.contains("cat") && e.target.value==="__add__"){
-let newCat=prompt("Enter New Category (ENG)");
-if(!newCat)return;
-newCat=newCat.toUpperCase();
-const option=document.createElement("option");
-option.textContent=newCat;
-option.value=newCat;
-e.target.insertBefore(option,e.target.lastElementChild);
-e.target.value=newCat;
-}
+  if(e.target.classList.contains("cat") && e.target.value==="__add__"){
+    dlgOpen({
+      title:"Add Category",
+      icon:"fa-plus",
+      msg:`<input id="newCat" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-weight:900;">`,
+      buttons:[
+        {label:"Cancel", type:"danger", onClick:()=>dlgClose()},
+        {label:"Add", type:"primary", onClick:()=>{
+          const val=document.getElementById("newCat").value.trim().toUpperCase();
+          if(!val){ return; }
+          const opt=document.createElement("option");
+          opt.textContent=val; opt.value=val;
+          e.target.insertBefore(opt,e.target.lastElementChild);
+          e.target.value=val;
+          dlgClose();
+        }}
+      ]
+    });
+  }
 });
 
-/* ADD SUBMIT */
+/* ===== ADD SUBMIT ===== */
 addBtn.onclick=async()=>{
-showLoader();
-let entries=[];
-let error=false;
+  showLoading();
+  let entries=[];
 
-for(const row of document.querySelectorAll("#addGrid tr")){
-const file=row.querySelector(".img").files[0];
-const design=row.querySelector(".design").value.trim();
-const mrp=row.querySelector(".mrp").value.trim();
-const cat=row.querySelector(".cat").value;
+  for(const row of document.querySelectorAll("#addGrid tr")){
+    const file=row.querySelector(".img").files[0];
+    const design=row.querySelector(".design").value.trim();
+    const mrp=row.querySelector(".mrp").value.trim();
+    const cat=row.querySelector(".cat").value;
 
-if(!file) continue;
+    if(!file) continue;
 
-if(!design || !mrp || !cat){
-showModal("If image is uploaded, all fields must be filled.");
-error=true;
-break;
-}
+    if(!design || !mrp || !cat){
+      hideLoading();
+      dlgOpen({msg:"If image uploaded, all fields required."});
+      return;
+    }
 
-const base64=await fileToBase64(file);
-entries.push({image:base64,design,mrp,category_eng:cat});
-}
+    const base64=await fileToBase64(file);
+    entries.push({image:base64,design,mrp,category_eng:cat});
+  }
 
-if(error || !entries.length){
-hideLoader();
-return;
-}
+  if(!entries.length){
+    hideLoading();
+    dlgOpen({msg:"No valid rows."});
+    return;
+  }
 
-const res=await fetch("/render",{
-method:"POST",
-headers:{'Content-Type':'application/json'},
-body:JSON.stringify({entries})
-});
-const data=await res.json();
+  const res=await fetch("/render",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({entries})
+  });
 
-hideLoader();
+  hideLoading();
+  const data=await res.json();
 
-if(data.ok){
-toast("ADD SUCCESS");
-wipeUI();
-}else{
-showModal("Backend Error");
-}
+  if(data.ok){
+    dlgOpen({title:"Success",icon:"fa-check",msg:"Add Completed"});
+    wipeUI();
+  }else{
+    dlgOpen({msg:"Backend Error"});
+  }
 };
 
-/* WIPE UI */
 function wipeUI(){
-document.querySelectorAll("#addGrid input").forEach(i=>i.value="");
-document.querySelectorAll("#addGrid select").forEach(s=>s.selectedIndex=0);
+  document.querySelectorAll("#addGrid input").forEach(i=>i.value="");
+  document.querySelectorAll("#addGrid select").forEach(s=>s.selectedIndex=0);
 }
 
-/* REPORT */
+/* ===== REPORT ===== */
 async function loadReport(){
-showLoader();
-const res=await fetch("/report/available");
-const data=await res.json();
-hideLoader();
+  showLoading();
+  const res=await fetch("/report/available");
+  const data=await res.json();
+  hideLoading();
 
-reportGrid.innerHTML="";
-data.data.forEach(r=>{
-reportGrid.innerHTML+=`
-<tr>
-<td>${r["CAT (BANGLA)"]}</td>
-<td>${r["CAT(ENG)"]}</td>
-<td>${r["DESIGN NAME"]}</td>
-<td>${r["MRP"]}</td>
-</tr>`;
-});
+  reportGrid.innerHTML="";
+  data.data.forEach(r=>{
+    reportGrid.innerHTML+=`
+    <tr>
+    <td>${r["CAT (BANGLA)"]}</td>
+    <td>${r["CAT(ENG)"]}</td>
+    <td>${r["DESIGN NAME"]}</td>
+    <td>${r["MRP"]}</td>
+    <td>
+      <select onchange="toggleAvail('${r["DESIGN NAME"]}',this.value)">
+        <option ${r.AVAILABILITY==='YES'?'selected':''}>YES</option>
+        <option ${r.AVAILABILITY==='NO'?'selected':''}>NO</option>
+      </select>
+    </td>
+    </tr>`;
+  });
+}
+document.querySelector("[data-tab='report']").onclick=loadReport;
+
+function toggleAvail(design,status){
+  fetch("/availability",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({design,status})
+  });
 }
 
-/* EXPORTS */
-function exportCSV(){
-let csv="CAT (BANGLA),CAT(ENG),DESIGN NAME,MRP\n";
-document.querySelectorAll("#reportGrid tr").forEach(r=>{
-csv+=Array.from(r.cells).map(c=>c.innerText).join(",")+"\n";
+/* ===== SEARCH ===== */
+searchBox.addEventListener("input",function(){
+  const val=this.value.toLowerCase();
+  document.querySelectorAll("#reportGrid tr").forEach(r=>{
+    r.style.display=r.innerText.toLowerCase().includes(val)?"":"none";
+  });
 });
-download(csv,"report.csv","text/csv");
-}
-function exportJSON(){
-let arr=[];
-document.querySelectorAll("#reportGrid tr").forEach(r=>{
-arr.push({
-cat_bangla:r.cells[0].innerText,
-cat_eng:r.cells[1].innerText,
-design:r.cells[2].innerText,
-mrp:r.cells[3].innerText
-});
-});
-download(JSON.stringify(arr,null,2),"report.json","application/json");
-}
-function exportExcel(){
-let html="<table>"+reportGrid.innerHTML+"</table>";
-download(html,"report.xls","application/vnd.ms-excel");
-}
-function download(content,filename,type){
-const blob=new Blob([content],{type});
-const a=document.createElement("a");
-a.href=URL.createObjectURL(blob);
-a.download=filename;
-a.click();
+
+/* ===== PRINT ===== */
+function printReport(){
+  let html=`
+  <h2 style="text-align:center;font-weight:900;">
+  SMS_CATALOGER<br>
+  Offices of Nawnit Nihal
+  </h2>
+  <table border="1" style="width:100%;border-collapse:collapse;">
+  <tr>
+  <th>CAT (BANGLA)</th>
+  <th>CAT(ENG)</th>
+  <th>DESIGN NAME</th>
+  <th>MRP</th>
+  </tr>
+  `;
+  document.querySelectorAll("#reportGrid tr").forEach(r=>{
+    if(r.style.display!=="none"){
+      html+=`<tr>
+      <td>${r.cells[0].innerText}</td>
+      <td>${r.cells[1].innerText}</td>
+      <td>${r.cells[2].innerText}</td>
+      <td>${r.cells[3].innerText}</td>
+      </tr>`;
+    }
+  });
+  html+="</table>";
+  const w=window.open("");
+  w.document.write(html);
+  w.print();
 }
 
 function fileToBase64(file){
-return new Promise((resolve,reject)=>{
-const reader=new FileReader();
-reader.onload=()=>resolve(reader.result);
-reader.onerror=reject;
-reader.readAsDataURL(file);
-});
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result);
+    reader.onerror=reject;
+    reader.readAsDataURL(file);
+  });
 }
 </script>
 </body>

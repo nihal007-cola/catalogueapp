@@ -139,7 +139,8 @@ input,select{
 <!-- REPORT TAB -->
 <div id="report" class="zone">
 <div class="actions">
-<input id="searchBox" placeholder="Search design..." style="flex:1;padding:10px;border-radius:30px;border:1px solid var(--border);font-weight:900;">
+<input id="searchBox" placeholder="Search design..."
+style="flex:1;padding:10px;border-radius:30px;border:1px solid var(--border);font-weight:900;">
 <button class="btn dark" onclick="printReport()"><i class="fas fa-print"></i> PRINT</button>
 </div>
 <div class="scroll-zone">
@@ -182,28 +183,23 @@ document.querySelectorAll(".tab").forEach(tab=>{
 });
 
 async function buildRows(){
-  try {
-    const res=await fetch("/categories");
-    const data=await res.json();
-    const cats=data.categories || [];
+  const res=await fetch("/categories");
+  const cats=(await res.json()).categories;
 
-    for(let i=0;i<30;i++){
-      addGrid.innerHTML+=`
-      <tr>
-      <td><input type="file" class="img" accept="image/*"></td>
-      <td><input class="design" placeholder="DES-123"></td>
-      <td><input class="mrp" placeholder="999"></td>
-      <td>
-        <select class="cat" onchange="handleCategory(this)">
-          <option value="">Select Category</option>
-          ${cats.map(c=>`<option value="${c}">${c}</option>`).join("")}
-          <option value="__add__">➕ Add New Category</option>
-        </select>
-      </td>
-      </tr>`;
-    }
-  } catch(error) {
-    console.error("Failed to load categories:", error);
+  for(let i=0;i<30;i++){
+    addGrid.innerHTML+=`
+    <tr>
+    <td><input type="file" class="img"></td>
+    <td><input class="design"></td>
+    <td><input class="mrp"></td>
+    <td>
+      <select class="cat" onchange="handleCategory(this)">
+        <option value="">Select Cat / Add Category</option>
+        ${cats.map(c=>`<option>${c}</option>`).join("")}
+        <option value="__add__">Add Category</option>
+      </select>
+    </td>
+    </tr>`;
   }
 }
 buildRows();
@@ -211,8 +207,8 @@ buildRows();
 function handleCategory(select){
   if(select.value==="__add__"){
     const newCat=prompt("Enter New Category (ENG)");
-    if(newCat && newCat.trim()){
-      const val=newCat.trim().toUpperCase();
+    if(newCat){
+      const val=newCat.toUpperCase();
       const option=document.createElement("option");
       option.text=val;
       option.value=val;
@@ -225,6 +221,7 @@ function handleCategory(select){
 }
 
 addBtn.onclick=async ()=>{
+  showLoading();
   const rows=document.querySelectorAll("#addGrid tr");
   let entries=[];
 
@@ -235,80 +232,53 @@ addBtn.onclick=async ()=>{
     const cat=r.querySelector(".cat").value.trim();
 
     if(img && design && mrp && cat){
-      showLoading();
       const base64=await fileToBase64(img);
       entries.push({image:base64,design,mrp,category_eng:cat});
     }
   }
 
   if(entries.length){
-    try {
-      await fetch("/render",{
-        method:"POST",
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({entries})
-      });
-      alert(`✅ Successfully uploaded ${entries.length} design(s)`);
-      
-      // Clear inputs
-      rows.forEach(r => {
-        r.querySelector(".img").value = '';
-        r.querySelector(".design").value = '';
-        r.querySelector(".mrp").value = '';
-        r.querySelector(".cat").value = '';
-      });
-    } catch(error) {
-      alert("❌ Upload failed: " + error.message);
-    }
-  } else {
-    alert("⚠️ No valid entries to upload");
+    await fetch("/render",{
+      method:"POST",
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({entries})
+    });
   }
-  
+
   hideLoading();
+  alert("Upload Complete");
 };
 
-// FIXED: loadReport function - now handles the response correctly
 async function loadReport(){
   showLoading();
-  try {
-    const res=await fetch("/report/available");
-    const data=await res.json();  // This is now the array directly
-    
-    reportGrid.innerHTML="";
-    data.forEach(r=>{
-      reportGrid.innerHTML+=`
-      <tr>
-      <td>${r["CAT (BANGLA)"] || ''}</td>
-      <td>${r["CAT(ENG)"] || ''}</td>
-      <td>${r["DESIGN NAME"] || ''}</td>
-      <td>${r["MRP"] || ''}</td>
-      <td>
-        <select onchange="toggleAvail('${r["DESIGN NAME"]}',this.value)">
-          <option value="YES" ${r["AVAILABILITY"]==="YES"?"selected":""}>YES</option>
-          <option value="NO" ${r["AVAILABILITY"]==="NO"?"selected":""}>NO</option>
-        </select>
-      </td>
-      </tr>`;
-    });
-  } catch(error) {
-    console.error("Failed to load report:", error);
-    reportGrid.innerHTML = '<tr><td colspan="5" style="text-align:center;color:red;">Failed to load data</td></tr>';
-  }
+  const res=await fetch("/report/available");
+  const data=await res.json();
   hideLoading();
+
+  reportGrid.innerHTML="";
+  data.data.forEach(r=>{
+    reportGrid.innerHTML+=`
+    <tr>
+    <td>${r["CAT (BANGLA)"]}</td>
+    <td>${r["CAT(ENG)"]}</td>
+    <td>${r["DESIGN NAME"]}</td>
+    <td>${r["MRP"]}</td>
+    <td>
+      <select onchange="toggleAvail('${r["DESIGN NAME"]}',this.value)">
+        <option value="YES" ${r["AVAILABILITY"]==="YES"?"selected":""}>YES</option>
+        <option value="NO" ${r["AVAILABILITY"]==="NO"?"selected":""}>NO</option>
+      </select>
+    </td>
+    </tr>`;
+  });
 }
 
 async function toggleAvail(design,status){
-  if(!design) return;
-  
-  try {
-    await fetch("/availability",{
-      method:"POST",
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({design,status})
-    });
-  } catch(error) {
-    console.error("Failed to update availability:", error);
-  }
+  await fetch("/availability",{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({design,status})
+  });
 }
 
 searchBox.addEventListener("input",function(){
@@ -321,17 +291,17 @@ searchBox.addEventListener("input",function(){
 function printReport(){
   let html=`<h2 style="text-align:center;font-weight:900;">
   SMS_CATALOGER<br>Offices of Nawnit Nihal</h2>
-  <table border="1" style="width:100%;border-collapse:collapse;font-family:Segoe UI;">
+  <table border="1" style="width:100%;border-collapse:collapse;">
   <tr><th>CAT (BANGLA)</th><th>CAT(ENG)</th>
   <th>DESIGN NAME</th><th>MRP</th></tr>`;
 
   document.querySelectorAll("#reportGrid tr").forEach(r=>{
-    if(r.style.display!=="none" && r.cells.length >= 4){
+    if(r.style.display!=="none"){
       html+=`<tr>
-      <td>${r.cells[0]?.innerText || ''}</td>
-      <td>${r.cells[1]?.innerText || ''}</td>
-      <td>${r.cells[2]?.innerText || ''}</td>
-      <td>${r.cells[3]?.innerText || ''}</td>
+      <td>${r.cells[0].innerText}</td>
+      <td>${r.cells[1].innerText}</td>
+      <td>${r.cells[2].innerText}</td>
+      <td>${r.cells[3].innerText}</td>
       </tr>`;
     }
   });
@@ -339,7 +309,6 @@ function printReport(){
   html+="</table>";
   const w=window.open("");
   w.document.write(html);
-  w.document.close();
   w.print();
 }
 

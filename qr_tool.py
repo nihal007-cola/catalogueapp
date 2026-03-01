@@ -1,6 +1,7 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from PIL import Image, ImageDraw, ImageFont
 import base64, io, qrcode, os, gspread, re, string, time
+import pandas as pd
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -175,33 +176,73 @@ def render():
 
     return jsonify({"ok":True})
 
-# FIXED: Report endpoint now returns array directly
 @app.route("/report/available")
 def report():
     if time.time() - REPORT_CACHE["time"] < 10 and REPORT_CACHE["data"] is not None:
         return jsonify(REPORT_CACHE["data"])
 
-    design = design_sheet.col_values(2)[1:]
-    mrp = design_sheet.col_values(3)[1:]
-    availability = design_sheet.col_values(5)[1:]
-    cat_eng = design_sheet.col_values(8)[1:]
-    cat_ban = design_sheet.col_values(9)[1:]
-
+    # Get all values at once to avoid multiple API calls
+    all_values = design_sheet.get_all_values()
+    
+    if len(all_values) <= 1:
+        return jsonify([])
+    
+    # Skip header row
+    data_rows = all_values[1:]
+    
     result = []
-
-    for i in range(len(design)):
-        result.append({
-            "CAT (BANGLA)": cat_ban[i] if i < len(cat_ban) else "",
-            "CAT(ENG)": cat_eng[i] if i < len(cat_eng) else "",
-            "DESIGN NAME": design[i],
-            "MRP": mrp[i] if i < len(mrp) else "",
-            "AVAILABILITY": availability[i] if i < len(availability) else "YES"
-        })
+    for row in data_rows:
+        if len(row) >= 10:  # Ensure row has enough columns
+            result.append({
+                "CAT (BANGLA)": row[8] if len(row) > 8 else "",
+                "CAT(ENG)": row[7] if len(row) > 7 else "",
+                "DESIGN NAME": row[1] if len(row) > 1 else "",
+                "MRP": row[2] if len(row) > 2 else "",
+                "AVAILABILITY": row[4] if len(row) > 4 else "YES"
+            })
 
     REPORT_CACHE["data"] = result
     REPORT_CACHE["time"] = time.time()
 
-    return jsonify(result)  # Return array directly, not wrapped in "data"
+    return jsonify(result)
+
+# NEW: Excel export endpoint
+@app.route("/report/export/excel")
+def export_excel():
+    # Get the same data as the report endpoint
+    if time.time() - REPORT_CACHE["time"] < 10 and REPORT_CACHE["data"] is not None:
+        data = REPORT_CACHE["data"]
+    else:
+        all_values = design_sheet.get_all_values()
+        data_rows = all_values[1:] if len(all_values) > 1 else []
+        
+        data = []
+        for row in data_rows:
+            if len(row) >= 10:
+                data.append({
+                    "CAT (BANGLA)": row[8] if len(row) > 8 else "",
+                    "CAT(ENG)": row[7] if len(row) > 7 else "",
+                    "DESIGN NAME": row[1] if len(row) > 1 else "",
+                    "MRP": row[2] if len(row) > 2 else "",
+                    "AVAILABILITY": row[4] if len(row) > 4 else "YES"
+                })
+
+    # Create DataFrame
+    df = pd.DataFrame(data)
+    
+    # Create Excel file in memory
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Catalog Report')
+    
+    output.seek(0)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='catalog_report.xlsx'
+    )
 
 @app.route("/availability",methods=["POST"])
 def availability():

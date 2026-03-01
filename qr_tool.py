@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from PIL import Image, ImageDraw, ImageFont
-import base64, io, qrcode, os, gspread, re, string
+import base64, io, qrcode, os, gspread, re, string, time
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -54,6 +54,9 @@ CATEGORY_MASTER = {
 }
 
 lock = Lock()
+
+# -------- CACHE FOR REPORT --------
+REPORT_CACHE = {"data": None, "time": 0}
 
 # ---------------- UTILITIES ----------------
 
@@ -174,20 +177,30 @@ def render():
 
 @app.route("/report/available")
 def report():
-    data = design_sheet.get_all_values()
-    rows = data[1:]
+    if time.time() - REPORT_CACHE["time"] < 10:
+        return jsonify({"data": REPORT_CACHE["data"]})
+
+    design = design_sheet.col_values(2)[1:]
+    mrp = design_sheet.col_values(3)[1:]
+    availability = design_sheet.col_values(5)[1:]
+    cat_eng = design_sheet.col_values(8)[1:]
+    cat_ban = design_sheet.col_values(9)[1:]
+
     result = []
 
-    for r in rows:
+    for i in range(len(design)):
         result.append({
-            "CAT (BANGLA)":r[COLUMN_INDEX["CAT (BANGLA)"]-1],
-            "CAT(ENG)":r[COLUMN_INDEX["CAT(ENG)"]-1],
-            "DESIGN NAME":r[COLUMN_INDEX["DESIGN NAME"]-1],
-            "MRP":r[COLUMN_INDEX["MRP"]-1],
-            "AVAILABILITY":r[COLUMN_INDEX["AVAILABILITY"]-1]
+            "CAT (BANGLA)": cat_ban[i] if i < len(cat_ban) else "",
+            "CAT(ENG)": cat_eng[i] if i < len(cat_eng) else "",
+            "DESIGN NAME": design[i],
+            "MRP": mrp[i] if i < len(mrp) else "",
+            "AVAILABILITY": availability[i] if i < len(availability) else "YES"
         })
 
-    return jsonify({"data":result})
+    REPORT_CACHE["data"] = result
+    REPORT_CACHE["time"] = time.time()
+
+    return jsonify({"data": result})
 
 @app.route("/availability",methods=["POST"])
 def availability():
@@ -198,12 +211,12 @@ def availability():
     if status not in ["YES","NO"]:
         return jsonify({"ok":False})
 
-    all_rows = design_sheet.get_all_values()
+    design_col = design_sheet.col_values(2)
 
-    for idx,row in enumerate(all_rows[1:],start=2):
-        if design == row[COLUMN_INDEX["DESIGN NAME"]-1].upper():
-            col_letter = chr(64 + COLUMN_INDEX["AVAILABILITY"])
-            design_sheet.update(f"{col_letter}{idx}",status)
+    for idx, value in enumerate(design_col[1:], start=2):
+        if value.strip().upper() == design:
+            design_sheet.update_cell(idx, COLUMN_INDEX["AVAILABILITY"], status)
+            REPORT_CACHE["time"] = 0
             return jsonify({"ok":True})
 
     return jsonify({"ok":False})

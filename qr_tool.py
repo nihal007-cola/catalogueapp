@@ -56,8 +56,10 @@ CATEGORY_MASTER = {
 
 lock = Lock()
 
-# -------- CACHE FOR REPORT --------
+# FAST REPORT CACHE
 REPORT_CACHE = {"data": None, "time": 0}
+CACHE_TTL = 15
+
 
 # ---------------- UTILITIES ----------------
 
@@ -100,11 +102,13 @@ def upload_to_drive(path, filename):
 
     return file_id, f"https://drive.google.com/file/d/{file_id}/view"
 
+
 # ---------------- ROUTES ----------------
 
 @app.route("/")
 def home():
     return send_from_directory("templates","index.html")
+
 
 @app.route("/categories")
 def categories():
@@ -112,6 +116,7 @@ def categories():
     unique = set([c.strip() for c in col if c.strip()])
     unique.update(CATEGORY_MASTER.keys())
     return jsonify({"categories":sorted(unique)})
+
 
 @app.route("/render",methods=["POST"])
 def render():
@@ -174,75 +179,37 @@ def render():
         if rows_to_append:
             design_sheet.append_rows(rows_to_append,value_input_option="RAW")
 
+    REPORT_CACHE["time"] = 0
     return jsonify({"ok":True})
+
 
 @app.route("/report/available")
 def report():
-    if time.time() - REPORT_CACHE["time"] < 10 and REPORT_CACHE["data"] is not None:
-        return jsonify(REPORT_CACHE["data"])
+    if time.time() - REPORT_CACHE["time"] < CACHE_TTL and REPORT_CACHE["data"]:
+        return jsonify({"data": REPORT_CACHE["data"]})
 
-    # Get all values at once to avoid multiple API calls
     all_values = design_sheet.get_all_values()
-    
     if len(all_values) <= 1:
-        return jsonify([])
-    
-    # Skip header row
-    data_rows = all_values[1:]
-    
+        return jsonify({"data": []})
+
+    rows = all_values[1:]
     result = []
-    for row in data_rows:
-        if len(row) >= 10:  # Ensure row has enough columns
+
+    for row in rows:
+        if len(row) >= 10:
             result.append({
-                "CAT (BANGLA)": row[8] if len(row) > 8 else "",
-                "CAT(ENG)": row[7] if len(row) > 7 else "",
-                "DESIGN NAME": row[1] if len(row) > 1 else "",
-                "MRP": row[2] if len(row) > 2 else "",
-                "AVAILABILITY": row[4] if len(row) > 4 else "YES"
+                "CAT (BANGLA)": row[8],
+                "CAT(ENG)": row[7],
+                "DESIGN NAME": row[1],
+                "MRP": row[2],
+                "AVAILABILITY": row[4] if row[4] else "YES"
             })
 
     REPORT_CACHE["data"] = result
     REPORT_CACHE["time"] = time.time()
 
-    return jsonify(result)
+    return jsonify({"data": result})
 
-# NEW: Excel export endpoint
-@app.route("/report/export/excel")
-def export_excel():
-    # Get the same data as the report endpoint
-    if time.time() - REPORT_CACHE["time"] < 10 and REPORT_CACHE["data"] is not None:
-        data = REPORT_CACHE["data"]
-    else:
-        all_values = design_sheet.get_all_values()
-        data_rows = all_values[1:] if len(all_values) > 1 else []
-        
-        data = []
-        for row in data_rows:
-            if len(row) >= 10:
-                data.append({
-                    "CAT (BANGLA)": row[8] if len(row) > 8 else "",
-                    "CAT(ENG)": row[7] if len(row) > 7 else "",
-                    "DESIGN NAME": row[1] if len(row) > 1 else "",
-                    "MRP": row[2] if len(row) > 2 else "",
-                    "AVAILABILITY": row[4] if len(row) > 4 else "YES"
-                })
-
-    # Create DataFrame
-    df = pd.DataFrame(data)
-    
-    # Create Excel file in memory
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Catalog Report')
-    
-    output.seek(0)
-    
-    return send_file(
-        output,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name='catalog_report.xlsx'
-    )
 
 @app.route("/availability",methods=["POST"])
 def availability():
@@ -253,15 +220,43 @@ def availability():
     if status not in ["YES","NO"]:
         return jsonify({"ok":False})
 
-    design_col = design_sheet.col_values(2)
+    col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
 
-    for idx, value in enumerate(design_col[1:], start=2):
+    for idx, value in enumerate(col[1:], start=2):
         if value.strip().upper() == design:
             design_sheet.update_cell(idx, COLUMN_INDEX["AVAILABILITY"], status)
             REPORT_CACHE["time"] = 0
             return jsonify({"ok":True})
 
     return jsonify({"ok":False})
+
+
+@app.route("/deduplicate", methods=["POST"])
+def deduplicate():
+    with lock:
+        all_values = design_sheet.get_all_values()
+        if len(all_values) <= 1:
+            return jsonify({"ok":True})
+
+        header = all_values[0]
+        rows = all_values[1:]
+
+        latest = {}
+        for row in rows:
+            if len(row) > 1:
+                design = row[1].strip().upper()
+                latest[design] = row
+
+        new_rows = list(latest.values())
+
+        design_sheet.clear()
+        design_sheet.append_row(header)
+        if new_rows:
+            design_sheet.append_rows(new_rows,value_input_option="RAW")
+
+    REPORT_CACHE["time"] = 0
+    return jsonify({"ok":True})
+
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",10000))

@@ -66,6 +66,29 @@ th{background:var(--primary);color:white;}
     color: white;
 }
 
+/* Print styles for full page printing */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #report, #report * {
+        visibility: visible;
+    }
+    #report {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    .scroll-zone {
+        max-height: none !important;
+        overflow: visible !important;
+    }
+    .actions, .tabs, header {
+        display: none !important;
+    }
+}
+
 input,select{
   width:100%;padding:6px;border-radius:8px;
   border:1px solid var(--border);
@@ -186,7 +209,7 @@ input,select{
 <div class="actions">
 <input id="searchBox" placeholder="Search design..." style="flex:1;">
 <button id="loadReportBtn" class="btn dark">LOAD REPORT</button>
-<button id="excelBtn" class="btn dark">EXPORT EXCEL</button>
+<button id="csvBtn" class="btn dark">EXPORT CSV</button>
 <button id="printBtn" class="btn dark">PRINT</button>
 </div>
 <div class="scroll-zone">
@@ -339,8 +362,58 @@ frag.appendChild(tr);
 reportGrid.appendChild(frag);
 };
 
-document.getElementById("excelBtn").onclick=()=>window.location="/report/export/excel";
-document.getElementById("printBtn").onclick=()=>window.print();
+// CHANGE: Replace Excel with CSV export
+document.getElementById("csvBtn").onclick=()=>{
+    const rows = Array.from(document.querySelectorAll("#reportGrid tr"));
+    if(rows.length === 0){
+        smsAlert("No data to export");
+        return;
+    }
+    
+    // Get headers
+    const headers = ["CAT (BANGLA)", "CAT(ENG)", "DESIGN NAME", "MRP", "AVAILABILITY"];
+    
+    // Get data from visible rows only (respects current search filter)
+    const data = rows.map(row => {
+        const cells = row.cells;
+        return [
+            cells[0]?.innerText || "",
+            cells[1]?.innerText || "",
+            cells[2]?.innerText || "",
+            cells[3]?.innerText || "",
+            cells[4]?.querySelector("select")?.value || ""
+        ];
+    }).filter(row => row.some(cell => cell !== "")); // Filter out empty rows
+    
+    // Create CSV content
+    const csvContent = [
+        headers.join(","),
+        ...data.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+    
+    // Download CSV file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "sms_catalog_report.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
+// FIX: Print all pages properly
+document.getElementById("printBtn").onclick=()=>{
+    // Ensure all rows are visible for printing
+    const rows = Array.from(document.querySelectorAll("#reportGrid tr"));
+    rows.forEach(row => row.style.display = "");
+    
+    // Small delay to ensure styles are applied
+    setTimeout(() => {
+        window.print();
+    }, 50);
+};
 
 function fileToBase64(file){
 return new Promise((resolve,reject)=>{

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -352,45 +351,62 @@ reader.readAsDataURL(file);
 });
 }
 
-// CHANGE 2: Google-style predictive DESIGN search (REPORT table only)
+// CHANGE 2: Google-style predictive DESIGN search - OPTIMIZED to prevent hanging
+let searchTimeout = null;
+const SEARCH_DELAY = 150; // milliseconds
+
 document.getElementById("searchBox").addEventListener("input", function () {
-
-    const query = this.value.trim().toUpperCase();
-    const rows = Array.from(document.querySelectorAll("#reportGrid tr"));
-
-    if (!query) {
-        rows.forEach(r => r.style.display = "");
-        return;
+    // Clear previous timeout
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
     }
-
-    let firstMatch = null;
-
-    rows.forEach(row => {
-        const designCell = row.cells[2];
-        if (!designCell) return;
-
-        const designText = designCell.innerText.toUpperCase();
-        const numericPart = designText.replace(/\D/g, '');
-
-        const isMatch =
-            designText.includes(query) ||
-            numericPart.startsWith(query);
-
-        if (isMatch) {
-            row.style.display = "";
-            if (!firstMatch) firstMatch = row;
-        } else {
-            row.style.display = "none";
+    
+    const searchBox = this;
+    const query = searchBox.value;
+    
+    // Set new timeout
+    searchTimeout = setTimeout(() => {
+        const rows = Array.from(document.querySelectorAll("#reportGrid tr"));
+        
+        if (!query.trim()) {
+            rows.forEach(r => r.style.display = "");
+            return;
         }
-    });
-
-    if (firstMatch) {
-        firstMatch.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
+        
+        const upperQuery = query.trim().toUpperCase();
+        let firstMatch = null;
+        
+        // Use requestAnimationFrame to prevent UI freezing
+        requestAnimationFrame(() => {
+            rows.forEach(row => {
+                const designCell = row.cells[2];
+                if (!designCell) return;
+                
+                const designText = designCell.innerText.toUpperCase();
+                const numericPart = designText.replace(/\D/g, '');
+                
+                const isMatch =
+                    designText.includes(upperQuery) ||
+                    numericPart.startsWith(upperQuery);
+                
+                if (isMatch) {
+                    row.style.display = "";
+                    if (!firstMatch) firstMatch = row;
+                } else {
+                    row.style.display = "none";
+                }
+            });
+            
+            if (firstMatch) {
+                firstMatch.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center"
+                });
+            }
         });
-    }
-
+        
+        searchTimeout = null;
+    }, SEARCH_DELAY);
 });
 </script>
 </body>

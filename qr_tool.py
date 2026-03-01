@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify, send_from_directory
 from PIL import Image, ImageDraw, ImageFont
-import base64, io, qrcode, os, gspread, re, string, csv, json
+import base64, io, qrcode, os, gspread, re, string
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -54,8 +54,6 @@ CATEGORY_MASTER = {
 
 lock = Lock()
 
-# ---------------- UTILITIES ----------------
-
 def normalize_design(d):
     d = d.strip().upper()
     if not d.startswith("DES-"):
@@ -73,12 +71,11 @@ def extract_format(design):
 
 def get_next_id():
     col = design_sheet.col_values(COLUMN_INDEX["ID"])[1:]
-    letters = [c for c in col if c.strip() in string.ascii_uppercase]
-    if not letters:
-        return "A"
-    last = sorted(letters)[-1]
-    idx = string.ascii_uppercase.index(last)
-    return string.ascii_uppercase[idx+1] if idx < 25 else last
+    used = set([c.strip() for c in col if c.strip() in string.ascii_uppercase])
+    for letter in string.ascii_uppercase:
+        if letter not in used:
+            return letter
+    return None
 
 def upload_to_drive(path, filename):
     meta = {"name":filename,"parents":[PARENT_FOLDER_ID]}
@@ -99,11 +96,9 @@ def update_availability(value, status):
     data = design_sheet.get_all_values()
     for idx, row in enumerate(data[1:], start=2):
         if value == row[COLUMN_INDEX["DESNO"]-1] or value == row[COLUMN_INDEX["DESIGN NAME"]-1].upper():
-            design_sheet.update(f"E{idx}", status)
+            design_sheet.update(f"E{idx}:E{idx}", [[status]])
             return True
     return False
-
-# ---------------- ROUTES ----------------
 
 @app.route("/")
 def home():
@@ -120,7 +115,6 @@ def categories():
 def render():
     data = request.json
     entries = data.get("entries", [])
-
     rows_to_append = []
 
     with lock:
@@ -177,13 +171,11 @@ def render():
 
     return jsonify({"ok":True})
 
-@app.route("/remove",methods=["POST"])
-def remove():
-    return jsonify({"ok":update_availability(request.json.get("design",""),"NO")})
-
-@app.route("/restock",methods=["POST"])
-def restock():
-    return jsonify({"ok":update_availability(request.json.get("design",""),"YES")})
+@app.route("/availability",methods=["POST"])
+def availability():
+    val = request.json.get("design","")
+    status = request.json.get("status","YES")
+    return jsonify({"ok":update_availability(val,status)})
 
 @app.route("/report/available")
 def report():
@@ -196,6 +188,7 @@ def report():
             "CAT(ENG)":r[COLUMN_INDEX["CAT(ENG)"]-1],
             "DESIGN NAME":r[COLUMN_INDEX["DESIGN NAME"]-1],
             "MRP":r[COLUMN_INDEX["MRP"]-1],
+            "AVAILABILITY":r[COLUMN_INDEX["AVAILABILITY"]-1],
         })
     return jsonify({"data":result})
 

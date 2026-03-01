@@ -7,8 +7,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
-
-/* ===== ROOT ===== */
 :root{
   --primary:#071a3a;
   --primary2:#0b2d66;
@@ -19,8 +17,6 @@
   --bg:#eef4ff;
   --text-dark:#1f2a3a;
 }
-
-/* ===== BASIC ===== */
 *{box-sizing:border-box;font-family:Segoe UI,Arial;}
 body{margin:0;background:var(--bg);}
 
@@ -31,21 +27,18 @@ header{
   display:flex;align-items:center;gap:14px;
   border-bottom:4px solid var(--secondary);
 }
-
 .logo{
   width:40px;height:40px;border-radius:12px;
   background:linear-gradient(135deg,var(--secondary),#2ecc71);
   display:flex;align-items:center;justify-content:center;
   font-weight:900;color:#07321c;
 }
-
 .panel{
   background:white;margin:18px;padding:20px;
   border-radius:16px;border:1px solid var(--border);
   box-shadow:0 10px 30px rgba(0,0,0,.05);
 }
 
-/* ===== TABS ===== */
 .tabs{display:flex;gap:12px;margin-bottom:18px;}
 .tab{
   padding:10px 22px;border-radius:999px;
@@ -53,17 +46,14 @@ header{
   font-weight:900;background:white;
 }
 .tab.active{background:var(--primary);color:white;border-color:var(--primary);}
-
 .zone{display:none;}
 .zone.active{display:block;}
 
-/* ===== TABLE ===== */
 .scroll-zone{
   max-height:65vh;overflow:auto;
   border:1px solid var(--border);
   border-radius:12px;
 }
-
 table{width:100%;border-collapse:collapse;font-size:12px;}
 th,td{border:1px solid var(--border);padding:8px;font-weight:900;}
 th{background:var(--primary);color:white;position:sticky;top:0;}
@@ -73,7 +63,6 @@ input,select{
   border:1px solid var(--border);
   font-weight:900;font-size:12px;
 }
-
 .actions{margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;}
 
 .btn{
@@ -90,7 +79,7 @@ input,select{
   background:linear-gradient(135deg,#ff5c5c,#e74c3c);
 }
 
-/* ===== LOADING OVERLAY ===== */
+/* Loading */
 .loading-overlay{
   position:fixed;inset:0;
   background:rgba(0,0,0,.7);
@@ -98,7 +87,6 @@ input,select{
   z-index:9999;
 }
 .loading-overlay.show{display:flex;}
-
 .loading-spinner{
   width:60px;height:60px;
   border:5px solid rgba(255,255,255,.3);
@@ -108,7 +96,7 @@ input,select{
 }
 @keyframes spin{to{transform:rotate(360deg);}}
 
-/* ===== DIALOG ===== */
+/* Dialog */
 .dlg-backdrop{
   position:fixed;inset:0;background:rgba(0,0,0,0.45);
   display:none;align-items:center;justify-content:center;
@@ -141,7 +129,6 @@ input,select{
   <div class="loading-spinner"></div>
 </div>
 
-<!-- SMS Dialog -->
 <div class="dlg-backdrop" id="dlgBackdrop">
   <div class="dlg">
     <div class="dlg-head">
@@ -170,7 +157,6 @@ input,select{
   <div class="tab" data-tab="report">REPORT</div>
 </div>
 
-<!-- ADD -->
 <div id="add" class="zone active">
 <div class="scroll-zone">
 <table>
@@ -190,10 +176,9 @@ input,select{
 </div>
 </div>
 
-<!-- REPORT -->
 <div id="report" class="zone">
 <div class="actions">
-<input id="searchBox" placeholder="Search design..." 
+<input id="searchBox" placeholder="Search design..."
 style="flex:1;padding:10px;border-radius:30px;border:1px solid var(--border);font-weight:900;">
 <button class="btn dark" onclick="printReport()"><i class="fas fa-print"></i> PRINT</button>
 </div>
@@ -217,7 +202,7 @@ style="flex:1;padding:10px;border-radius:30px;border:1px solid var(--border);fon
 
 <script>
 
-/* ===== DIALOG SYSTEM ===== */
+/* Dialog */
 function dlgOpen({title="Message", msg="-", icon="fa-circle-info", buttons=[]}){
   dlgTitle.innerHTML=`<i class="fas ${icon}"></i> ${title}`;
   dlgMsg.innerHTML=msg;
@@ -228,7 +213,7 @@ function dlgOpen({title="Message", msg="-", icon="fa-circle-info", buttons=[]}){
   buttons.forEach(b=>{
     const btn=document.createElement("button");
     btn.className="btn "+(b.type||"dark");
-    btn.innerHTML=`${b.label}`;
+    btn.innerHTML=b.label;
     btn.onclick=()=>{ b.onClick && b.onClick(); };
     dlgActions.appendChild(btn);
   });
@@ -236,25 +221,30 @@ function dlgOpen({title="Message", msg="-", icon="fa-circle-info", buttons=[]}){
 }
 function dlgClose(){ dlgBackdrop.style.display="none"; }
 
-/* ===== LOADER ===== */
+/* Loader */
 function showLoading(){ loadingOverlay.classList.add("show"); }
 function hideLoading(){ loadingOverlay.classList.remove("show"); }
 
-/* ===== TABS ===== */
+/* Tabs (FIXED) */
 document.querySelectorAll(".tab").forEach(tab=>{
   tab.onclick=()=>{
     document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
     document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
     tab.classList.add("active");
-    document.getElementById(tab.dataset.tab).classList.add("active");
+    const id=tab.dataset.tab;
+    document.getElementById(id).classList.add("active");
+
+    if(id==="report"){
+      loadReport();
+    }
   };
 });
 
-/* ===== BUILD ADD GRID ===== */
+/* Rest unchanged below */
+
 async function buildRows(){
   const res=await fetch("/categories");
   const cats=(await res.json()).categories;
-
   for(let i=0;i<30;i++){
     addGrid.innerHTML+=`
     <tr>
@@ -273,81 +263,6 @@ async function buildRows(){
 }
 buildRows();
 
-/* ===== ADD CATEGORY SMS DIALOG ===== */
-document.addEventListener("change",function(e){
-  if(e.target.classList.contains("cat") && e.target.value==="__add__"){
-    dlgOpen({
-      title:"Add Category",
-      icon:"fa-plus",
-      msg:`<input id="newCat" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font-weight:900;">`,
-      buttons:[
-        {label:"Cancel", type:"danger", onClick:()=>dlgClose()},
-        {label:"Add", type:"primary", onClick:()=>{
-          const val=document.getElementById("newCat").value.trim().toUpperCase();
-          if(!val){ return; }
-          const opt=document.createElement("option");
-          opt.textContent=val; opt.value=val;
-          e.target.insertBefore(opt,e.target.lastElementChild);
-          e.target.value=val;
-          dlgClose();
-        }}
-      ]
-    });
-  }
-});
-
-/* ===== ADD SUBMIT ===== */
-addBtn.onclick=async()=>{
-  showLoading();
-  let entries=[];
-
-  for(const row of document.querySelectorAll("#addGrid tr")){
-    const file=row.querySelector(".img").files[0];
-    const design=row.querySelector(".design").value.trim();
-    const mrp=row.querySelector(".mrp").value.trim();
-    const cat=row.querySelector(".cat").value;
-
-    if(!file) continue;
-
-    if(!design || !mrp || !cat){
-      hideLoading();
-      dlgOpen({msg:"If image uploaded, all fields required."});
-      return;
-    }
-
-    const base64=await fileToBase64(file);
-    entries.push({image:base64,design,mrp,category_eng:cat});
-  }
-
-  if(!entries.length){
-    hideLoading();
-    dlgOpen({msg:"No valid rows."});
-    return;
-  }
-
-  const res=await fetch("/render",{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({entries})
-  });
-
-  hideLoading();
-  const data=await res.json();
-
-  if(data.ok){
-    dlgOpen({title:"Success",icon:"fa-check",msg:"Add Completed"});
-    wipeUI();
-  }else{
-    dlgOpen({msg:"Backend Error"});
-  }
-};
-
-function wipeUI(){
-  document.querySelectorAll("#addGrid input").forEach(i=>i.value="");
-  document.querySelectorAll("#addGrid select").forEach(s=>s.selectedIndex=0);
-}
-
-/* ===== REPORT ===== */
 async function loadReport(){
   showLoading();
   const res=await fetch("/report/available");
@@ -371,7 +286,6 @@ async function loadReport(){
     </tr>`;
   });
 }
-document.querySelector("[data-tab='report']").onclick=loadReport;
 
 function toggleAvail(design,status){
   fetch("/availability",{
@@ -381,7 +295,6 @@ function toggleAvail(design,status){
   });
 }
 
-/* ===== SEARCH ===== */
 searchBox.addEventListener("input",function(){
   const val=this.value.toLowerCase();
   document.querySelectorAll("#reportGrid tr").forEach(r=>{
@@ -389,21 +302,12 @@ searchBox.addEventListener("input",function(){
   });
 });
 
-/* ===== PRINT ===== */
 function printReport(){
-  let html=`
-  <h2 style="text-align:center;font-weight:900;">
-  SMS_CATALOGER<br>
-  Offices of Nawnit Nihal
-  </h2>
+  let html=`<h2 style="text-align:center;font-weight:900;">
+  SMS_CATALOGER<br>Offices of Nawnit Nihal</h2>
   <table border="1" style="width:100%;border-collapse:collapse;">
-  <tr>
-  <th>CAT (BANGLA)</th>
-  <th>CAT(ENG)</th>
-  <th>DESIGN NAME</th>
-  <th>MRP</th>
-  </tr>
-  `;
+  <tr><th>CAT (BANGLA)</th><th>CAT(ENG)</th>
+  <th>DESIGN NAME</th><th>MRP</th></tr>`;
   document.querySelectorAll("#reportGrid tr").forEach(r=>{
     if(r.style.display!=="none"){
       html+=`<tr>

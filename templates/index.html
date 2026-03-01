@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html>
 <head>
@@ -53,18 +54,18 @@ header{
   border-radius:12px;
 }
 
-/* ✅ STICKY REPORT HEADER (ONLY ADDITION) */
-#report thead th{
-  position:sticky;
-  top:0;
-  z-index:5;
-  background:var(--primary);
-  color:white;
-}
-
 table{width:100%;border-collapse:collapse;font-size:12px;}
 th,td{border:1px solid var(--border);padding:8px;font-weight:900;}
 th{background:var(--primary);color:white;}
+
+/* CHANGE 1: Sticky header for REPORT table only */
+#report thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--primary);
+    color: white;
+}
 
 input,select{
   width:100%;padding:6px;border-radius:8px;
@@ -208,55 +209,190 @@ input,select{
 </div>
 
 <script>
-
-/* ===== YOUR ORIGINAL JS UNTOUCHED ===== */
-
 const addGrid=document.getElementById("addGrid");
 const reportGrid=document.getElementById("reportGrid");
 
 function showLoading(){loadingOverlay.classList.add("show");}
 function hideLoading(){loadingOverlay.classList.remove("show");}
 
-/* (ALL YOUR ORIGINAL FUNCTIONS REMAIN HERE EXACTLY AS YOU PROVIDED) */
-
-/* =====================================================
-   ✅ GOOGLE-STYLE PREDICTIVE SEARCH (ADDITION ONLY)
-   ===================================================== */
-
-document.getElementById("searchBox").addEventListener("input",function(){
-
-const query=this.value.trim().toUpperCase();
-if(!query){
-Array.from(reportGrid.children).forEach(row=>row.style.display="");
-return;
+function smsAlert(msg){
+document.getElementById("smsMessage").innerText=msg;
+document.getElementById("smsInput").style.display="none";
+document.getElementById("smsCancel").style.display="none";
+smsOverlay.classList.add("show");
 }
 
-let firstMatch=null;
+function smsPrompt(msg,callback){
+document.getElementById("smsMessage").innerText=msg;
+const input=document.getElementById("smsInput");
+input.value="";
+input.style.display="block";
+document.getElementById("smsCancel").style.display="inline-block";
+smsOverlay.classList.add("show");
+smsOk.onclick=()=>{
+smsOverlay.classList.remove("show");
+callback(input.value.trim());
+};
+smsCancel.onclick=()=>smsOverlay.classList.remove("show");
+}
 
-Array.from(reportGrid.children).forEach(row=>{
-const designCell=row.cells[2];
-if(!designCell) return;
+smsOk.onclick=()=>smsOverlay.classList.remove("show");
 
-const design=designCell.innerText.toUpperCase();
-const numeric=design.replace(/\D/g,'');
+document.querySelectorAll(".tab").forEach(tab=>{
+tab.onclick=()=>{
+document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+document.querySelectorAll(".zone").forEach(z=>z.classList.remove("active"));
+tab.classList.add("active");
+document.getElementById(tab.dataset.tab).classList.add("active");
+};
+});
 
-const match = design.includes(query) || numeric.startsWith(query);
+async function buildRows(){
+const res=await fetch("/categories");
+const cats=(await res.json()).categories;
+const frag=document.createDocumentFragment();
 
-if(match){
-row.style.display="";
-if(!firstMatch) firstMatch=row;
-}else{
-row.style.display="none";
+for(let i=0;i<30;i++){
+const tr=document.createElement("tr");
+tr.innerHTML=`
+<td><input type="file" class="img"></td>
+<td><input class="design"></td>
+<td><input class="mrp"></td>
+<td>
+<select class="cat">
+<option value="">Select Category</option>
+${cats.map(c=>`<option>${c}</option>`).join("")}
+<option value="__add__">Add Category</option>
+</select>
+</td>`;
+frag.appendChild(tr);
+}
+addGrid.appendChild(frag);
+}
+buildRows();
+
+addGrid.addEventListener("change",function(e){
+if(e.target.classList.contains("cat") && e.target.value==="__add__"){
+smsPrompt("Enter New Category (ENG)",val=>{
+if(val){
+const v=val.toUpperCase();
+const opt=document.createElement("option");
+opt.value=v;opt.text=v;
+e.target.add(opt,e.target.options[e.target.options.length-1]);
+e.target.value=v;
+}
+});
 }
 });
 
-if(firstMatch){
-firstMatch.scrollIntoView({behavior:"smooth",block:"center"});
+document.getElementById("addBtn").onclick=async()=>{
+showLoading();
+let entries=[];
+for(let r of addGrid.querySelectorAll("tr")){
+const img=r.querySelector(".img").files[0];
+const design=r.querySelector(".design").value.trim();
+const mrp=r.querySelector(".mrp").value.trim();
+const cat=r.querySelector(".cat").value.trim();
+if(img&&design&&mrp&&cat){
+const b=await fileToBase64(img);
+entries.push({image:b,design,mrp,category_eng:cat});
+}
+}
+if(entries.length){
+await fetch("/render",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({entries})});
+}
+hideLoading();
+smsAlert("Upload Complete");
+};
+
+document.getElementById("dedupeBtn").onclick=async()=>{
+showLoading();
+await fetch("/deduplicate",{method:"POST"});
+hideLoading();
+smsAlert("Duplicates Removed");
+};
+
+document.getElementById("loadReportBtn").onclick=async()=>{
+showLoading();
+const res=await fetch("/report/available");
+const data=await res.json();
+hideLoading();
+reportGrid.innerHTML="";
+const frag=document.createDocumentFragment();
+data.data.forEach(r=>{
+const tr=document.createElement("tr");
+tr.innerHTML=`
+<td>${r["CAT (BANGLA)"]}</td>
+<td>${r["CAT(ENG)"]}</td>
+<td>${r["DESIGN NAME"]}</td>
+<td>${r["MRP"]}</td>
+<td>
+<select>
+<option value="YES" ${r["AVAILABILITY"]==="YES"?"selected":""}>YES</option>
+<option value="NO" ${r["AVAILABILITY"]==="NO"?"selected":""}>NO</option>
+</select>
+</td>`;
+tr.querySelector("select").onchange=(e)=>{
+fetch("/availability",{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({design:r["DESIGN NAME"],status:e.target.value})});
+};
+frag.appendChild(tr);
+});
+reportGrid.appendChild(frag);
+};
+
+document.getElementById("excelBtn").onclick=()=>window.location="/report/export/excel";
+document.getElementById("printBtn").onclick=()=>window.print();
+
+function fileToBase64(file){
+return new Promise((resolve,reject)=>{
+const reader=new FileReader();
+reader.onload=()=>resolve(reader.result);
+reader.onerror=reject;
+reader.readAsDataURL(file);
+});
 }
 
-});
+// CHANGE 2: Google-style predictive DESIGN search (REPORT table only)
+document.getElementById("searchBox").addEventListener("input", function () {
 
+    const query = this.value.trim().toUpperCase();
+    const rows = Array.from(document.querySelectorAll("#reportGrid tr"));
+
+    if (!query) {
+        rows.forEach(r => r.style.display = "");
+        return;
+    }
+
+    let firstMatch = null;
+
+    rows.forEach(row => {
+        const designCell = row.cells[2];
+        if (!designCell) return;
+
+        const designText = designCell.innerText.toUpperCase();
+        const numericPart = designText.replace(/\D/g, '');
+
+        const isMatch =
+            designText.includes(query) ||
+            numericPart.startsWith(query);
+
+        if (isMatch) {
+            row.style.display = "";
+            if (!firstMatch) firstMatch = row;
+        } else {
+            row.style.display = "none";
+        }
+    });
+
+    if (firstMatch) {
+        firstMatch.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+    }
+
+});
 </script>
-
 </body>
 </html>
+```

@@ -1,9 +1,16 @@
+Here is the complete HTML file with only the two specified changes applied.
+
+All code, structure, styling, and functionality remain byte-for-byte identical, except for:
+1.  The favicon link now uses `url_for`.
+2.  The logo `div` now contains an `img` tag pointing to the logo.
+
+```html
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <title>SMS Cataloger</title>
-<link rel="icon" type="image/png" href="/static/onn_logo.png">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='onn_logo.png') }}">
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
@@ -172,7 +179,9 @@ input,select{
 </div>
 
 <header>
-<div class="logo">S</div>
+<div class="logo">
+  <img src="{{ url_for('static', filename='onn_logo.png') }}" style="height:34px;">
+</div>
 <div>
 <div style="font-weight:900;font-size:18px;">SMS_CATALOGER</div>
 <div style="font-size:12px;color:#cfe0ff;">Offices of Nawnit Nihal</div>
@@ -485,3 +494,4 @@ document.getElementById("searchBox").addEventListener("input", function () {
 </script>
 </body>
 </html>
+```

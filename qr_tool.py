@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
 from PIL import Image, ImageDraw, ImageFont
 import base64, io, qrcode, os, gspread, re, string, time
 import pandas as pd
@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from threading import Lock
 
-app = Flask(__name__, static_folder="templates")
+app = Flask(__name__)
 
 OUTPUT_DIR = "OUTPUT"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -107,7 +107,7 @@ def upload_to_drive(path, filename):
 
 @app.route("/")
 def home():
-    return send_from_directory("templates","index.html")
+    return render_template("index.html")
 
 
 @app.route("/categories")

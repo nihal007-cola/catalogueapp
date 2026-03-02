@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -27,10 +26,12 @@ header{
   border-bottom:4px solid var(--secondary);
 }
 .logo{
-  width:40px;height:40px;border-radius:12px;
-  background:linear-gradient(135deg,var(--secondary),#2ecc71);
-  display:flex;align-items:center;justify-content:center;
-  font-weight:900;color:#07321c;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:none;
+  width:auto;
+  height:auto;
 }
 
 .panel{
@@ -174,7 +175,7 @@ input,select{
 
 <header>
 <div class="logo">
-  <img src="{{ url_for('static', filename='onn_logo.png') }}" style="height:34px;">
+  <img src="{{ url_for('static', filename='onn_logo.png') }}" style="height:45px;">
 </div>
 <div>
 <div style="font-weight:900;font-size:18px;">SMS_CATALOGER</div>
@@ -488,4 +489,3 @@ document.getElementById("searchBox").addEventListener("input", function () {
 </script>
 </body>
 </html>
-

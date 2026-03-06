@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
 from PIL import Image, ImageDraw, ImageFont
-import base64, io, qrcode, os, gspread, re, string, time, json
+import base64, io, qrcode, os, gspread, re, string, time
 import pandas as pd
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from threading import Lock
@@ -17,14 +18,16 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# SERVICE ACCOUNT AUTH (replaces OAuth refresh token)
-service_info = json.loads(os.environ["GOOGLE_SERVICE_JSON"])
-
-creds = service_account.Credentials.from_service_account_info(
-    service_info,
+creds = Credentials(
+    None,
+    refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
+    token_uri="https://oauth2.googleapis.com/token",
+    client_id=os.environ["GOOGLE_CLIENT_ID"],
+    client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     scopes=SCOPES
 )
 
+creds.refresh(Request())
 gc = gspread.authorize(creds)
 drive_service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
@@ -53,6 +56,7 @@ CATEGORY_MASTER = {
 
 lock = Lock()
 
+# FAST REPORT CACHE
 REPORT_CACHE = {"data": None, "time": 0}
 CACHE_TTL = 15
 
@@ -86,13 +90,9 @@ def get_next_id():
 def upload_to_drive(path, filename):
     meta = {"name":filename,"parents":[PARENT_FOLDER_ID]}
     media = MediaFileUpload(path,mimetype="image/jpeg")
-
     file = drive_service.files().create(
-        body=meta,
-        media_body=media,
-        fields="id"
+        body=meta,media_body=media,fields="id"
     ).execute()
-
     file_id = file.get("id")
 
     drive_service.permissions().create(
@@ -126,7 +126,6 @@ def render():
 
     with lock:
         for item in entries:
-
             image_data = item.get("image")
             design_raw = item.get("design")
             mrp = item.get("mrp")
@@ -151,7 +150,6 @@ def render():
             W,H = 1600,2000
             canvas = Image.new("RGB",(W,H),"white")
             draw = ImageDraw.Draw(canvas)
-
             draw.rectangle([5,5,W-5,H-5],outline="black",width=2)
 
             img.thumbnail((W-80,H-360))
@@ -161,7 +159,6 @@ def render():
             font_small = ImageFont.truetype("DejaVuSans.ttf",44)
 
             text_y = H-260
-
             draw.text((60,text_y),design,fill="black",font=font_big)
             draw.text((60,text_y+75),f"MRP: {mrp}",fill="black",font=font_small)
 
@@ -175,34 +172,23 @@ def render():
             file_id, drive_link = upload_to_drive(path,f"{design}.jpg")
 
             rows_to_append.append([
-                file_id,
-                design,
-                mrp,
-                drive_link,
-                "YES",
-                des_format,
-                desno,
-                cat_eng,
-                cat_bangla,
-                cat_id
+                file_id, design, mrp, drive_link, "YES",
+                des_format, desno, cat_eng, cat_bangla, cat_id
             ])
 
         if rows_to_append:
             design_sheet.append_rows(rows_to_append,value_input_option="RAW")
 
     REPORT_CACHE["time"] = 0
-
     return jsonify({"ok":True})
 
 
 @app.route("/report/available")
 def report():
-
     if time.time() - REPORT_CACHE["time"] < CACHE_TTL and REPORT_CACHE["data"]:
         return jsonify({"data": REPORT_CACHE["data"]})
 
     all_values = design_sheet.get_all_values()
-
     if len(all_values) <= 1:
         return jsonify({"data": []})
 
@@ -210,9 +196,7 @@ def report():
     result = []
 
     for row in rows:
-
         if len(row) >= 10:
-
             result.append({
                 "CAT (BANGLA)": row[8],
                 "CAT(ENG)": row[7],
@@ -229,7 +213,6 @@ def report():
 
 @app.route("/availability",methods=["POST"])
 def availability():
-
     data = request.json
     design = data.get("design","").strip().upper()
     status = data.get("status","").strip().upper()
@@ -239,30 +222,19 @@ def availability():
 
     col = design_sheet.col_values(COLUMN_INDEX["DESIGN NAME"])
 
-    for idx,value in enumerate(col[1:],start=2):
-
+    for idx, value in enumerate(col[1:], start=2):
         if value.strip().upper() == design:
-
-            design_sheet.update_cell(
-                idx,
-                COLUMN_INDEX["AVAILABILITY"],
-                status
-            )
-
+            design_sheet.update_cell(idx, COLUMN_INDEX["AVAILABILITY"], status)
             REPORT_CACHE["time"] = 0
-
             return jsonify({"ok":True})
 
     return jsonify({"ok":False})
 
 
-@app.route("/deduplicate",methods=["POST"])
+@app.route("/deduplicate", methods=["POST"])
 def deduplicate():
-
     with lock:
-
         all_values = design_sheet.get_all_values()
-
         if len(all_values) <= 1:
             return jsonify({"ok":True})
 
@@ -270,11 +242,8 @@ def deduplicate():
         rows = all_values[1:]
 
         latest = {}
-
         for row in rows:
-
             if len(row) > 1:
-
                 design = row[1].strip().upper()
                 latest[design] = row
 
@@ -282,12 +251,10 @@ def deduplicate():
 
         design_sheet.clear()
         design_sheet.append_row(header)
-
         if new_rows:
             design_sheet.append_rows(new_rows,value_input_option="RAW")
 
     REPORT_CACHE["time"] = 0
-
     return jsonify({"ok":True})
 
 

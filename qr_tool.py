@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
 from PIL import Image, ImageDraw, ImageFont
-import base64, io, qrcode, os, gspread, re, string, time, json
+import base64, io, qrcode, os, gspread, re, string, time
 import pandas as pd
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from threading import Lock
@@ -17,12 +18,16 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-# SERVICE ACCOUNT AUTH (replaces OAuth refresh token)
-creds = service_account.Credentials.from_service_account_info(
-    json.loads(os.environ["GOOGLE_CREDS"]),
+creds = Credentials(
+    None,
+    refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
+    token_uri="https://oauth2.googleapis.com/token",
+    client_id=os.environ["GOOGLE_CLIENT_ID"],
+    client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     scopes=SCOPES
 )
 
+creds.refresh(Request())
 gc = gspread.authorize(creds)
 drive_service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
@@ -51,9 +56,12 @@ CATEGORY_MASTER = {
 
 lock = Lock()
 
+# FAST REPORT CACHE
 REPORT_CACHE = {"data": None, "time": 0}
 CACHE_TTL = 15
 
+
+# ---------------- UTILITIES ----------------
 
 def normalize_design(d):
     d = d.strip().upper()
@@ -94,6 +102,8 @@ def upload_to_drive(path, filename):
 
     return file_id, f"https://drive.google.com/file/d/{file_id}/view"
 
+
+# ---------------- ROUTES ----------------
 
 @app.route("/")
 def home():
